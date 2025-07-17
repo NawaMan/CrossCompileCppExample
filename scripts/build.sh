@@ -178,13 +178,29 @@ elif [ "$ARCH" = "mac-arm" ]; then
   fi
 elif [ "$ARCH" = "win-x86" ]; then
   echo "Building for Windows x86_64 architecture"
-  COMPILER="x86_64-w64-mingw32-clang++"
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Use direct MinGW compiler on GitHub Actions
+    COMPILER="x86_64-w64-mingw32-g++"
+  else
+    COMPILER="x86_64-w64-mingw32-clang++"
+  fi
   ARCH_FLAGS=""
   SYSROOT_FLAGS=""
   EXTENSION=".exe"
 elif [ "$ARCH" = "win-arm" ]; then
   echo "Building for Windows ARM64 architecture"
-  COMPILER="aarch64-w64-mingw32-clang++"
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Check if aarch64-w64-mingw32-g++ is available
+    if command -v aarch64-w64-mingw32-g++ &> /dev/null; then
+      COMPILER="aarch64-w64-mingw32-g++"
+    else
+      echo "Warning: aarch64-w64-mingw32-g++ not found. Using Docker for Windows ARM64 build."
+      USE_DOCKER=true
+      COMPILER="aarch64-w64-mingw32-clang++"
+    fi
+  else
+    COMPILER="aarch64-w64-mingw32-clang++"
+  fi
   ARCH_FLAGS=""
   SYSROOT_FLAGS=""
   EXTENSION=".exe"
@@ -215,8 +231,7 @@ echo \"Build directory: ${BUILD_DIR}\"
 echo \"Binary directory: ${BIN_DIR}\"
 
 # Create build directories
-mkdir -p \"${BUILD_DIR}\"
-mkdir -p \"${BIN_DIR}\"
+mkdir -p \"${BUILD_DIR}\" && mkdir -p \"${BIN_DIR}\"
 
 # Compile source files
 for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
@@ -226,27 +241,50 @@ for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
 done
 
 # Set output binary name with extension if needed
-OUTPUT_BINARY=\"app${EXTENSION:-}\"
+EXTENSION=${EXTENSION:-\"\"}
+OUTPUT_BINARY=\"app${EXTENSION}\"
+
+# Debug output
+echo \"Debug: Using binary name: ${OUTPUT_BINARY}\"
+
+# Ensure binary directory exists and is clean
+rm -rf \"${BIN_DIR}\"
+mkdir -p \"${BIN_DIR}\"
 
 # Link object files
-echo \"Linking ${BIN_DIR}/${OUTPUT_BINARY}\"
-${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/${OUTPUT_BINARY}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+echo \"Linking ${BIN_DIR}/app\"
+
+# Special handling for Windows cross-compilation
+if [ \"${ARCH}\" = \"win-x86\" ]; then
+    echo \"Using ${COMPILER} for Windows x86_64 compilation\"
+    ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+elif [ \"${ARCH}\" = \"win-arm\" ]; then
+    echo \"Using ${COMPILER} for Windows ARM64 compilation\"
+    ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+else
+    # Debug output
+    echo \"Debug: BIN_DIR=${BIN_DIR}\"
+    echo \"Debug: Using hardcoded binary name 'app'\"
+    
+    # Link with explicit hardcoded binary name
+    ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+fi
 
 if [ \"${ARCH}\" = \"linux-arm\" ]; then
     echo \"Cross-compilation completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
+    echo \"Executable location: ${BIN_DIR}/app\"
     echo \"Note: This executable is built for ARM64 and cannot be run on x86_64 without emulation.\"
 elif [ \"${ARCH}\" = \"mac-x86\" ] || [ \"${ARCH}\" = \"mac-arm\" ]; then
     echo \"macOS cross-compilation completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
+    echo \"Executable location: ${BIN_DIR}/app\"
     echo \"Note: This executable is built for macOS and cannot be run on Linux without proper emulation.\"
 elif [ \"${ARCH}\" = \"win-x86\" ] || [ \"${ARCH}\" = \"win-arm\" ]; then
     echo \"Windows cross-compilation completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
+    echo \"Executable location: ${BIN_DIR}/app.exe\"
     echo \"Note: This executable is built for Windows and cannot be run on Linux without proper emulation.\"
 else
     echo \"Build completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
+    echo \"Executable location: ${BIN_DIR}/app\"
 fi"
 
 if [ "$IN_GITHUB_ACTIONS" = true ]; then
