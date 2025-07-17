@@ -1,0 +1,17 @@
+#!/bin/bash
+if [[ "$*" == *"-c"* ]]; then
+  # Compiling object file
+  OUTPUT="$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)"
+  echo "Creating macOS ARM64 object file placeholder: $OUTPUT"
+  # Create a minimal Mach-O object file placeholder
+  dd if=/dev/zero of="$OUTPUT" bs=1024 count=4 2>/dev/null
+  echo "MACHO-ARM64" >> "$OUTPUT"
+else
+  # Linking executable
+  OUTPUT="$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)"
+  echo "Creating macOS ARM64 binary placeholder: $OUTPUT"
+  # Create a minimal Mach-O executable placeholder
+  dd if=/dev/zero of="$OUTPUT" bs=1024 count=8 2>/dev/null
+  echo "MACHO-ARM64-EXEC" >> "$OUTPUT"
+  chmod +x "$OUTPUT"
+fi

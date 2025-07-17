@@ -1,0 +1,186 @@
+name: Cross-Platform Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Combined build job for all platforms using matrix strategy
+  build:
+    name: Build ${{ matrix.os }} Platforms
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Linux build dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
+        clang --version
+    
+    - name: Install macOS build dependencies
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install llvm
+        clang --version
+    
+    # Build Linux platforms
+    - name: Build Linux x86_64
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/build.sh linux-x86
+      
+    - name: Build Linux ARM64
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/build.sh linux-arm
+      
+    # Build macOS platforms
+    - name: Build macOS x86_64
+      if: matrix.os == 'macos-latest'
+      run: ./scripts/build.sh mac-x86
+      
+    - name: Build macOS ARM64
+      if: matrix.os == 'macos-latest'
+      run: ./scripts/build.sh mac-arm
+      
+    # Upload artifacts
+    - name: Upload Linux x86_64 artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-x86-binaries
+        path: build/linux-x86/bin/
+        retention-days: 1
+        
+    - name: Upload Linux ARM64 artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-arm-binaries
+        path: build/linux-arm/bin/
+        retention-days: 1
+        
+    - name: Upload macOS x86_64 artifacts
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-x86-binaries
+        path: build/mac-x86/bin/
+        retention-days: 1
+        
+    - name: Upload macOS ARM64 artifacts
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-arm-binaries
+        path: build/mac-arm/bin/
+        retention-days: 1
+
+  # Test jobs for each platform
+  test-linux-x86:
+    name: Test Linux x86_64
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Linux x86_64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-x86-binaries
+        path: build/linux-x86/bin/
+      
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm lld build-essential
+      
+    - name: Test Linux x86_64
+      run: ./scripts/test.sh linux-x86
+
+  test-linux-arm:
+    name: Test Linux ARM64
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Linux ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-arm-binaries
+        path: build/linux-arm/bin/
+      
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
+      
+    - name: Test Linux ARM64
+      run: ./scripts/test.sh linux-arm
+
+  # Test macOS binaries on macOS runner
+  test-macos:
+    name: Test macOS Builds
+    needs: build
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download macOS x86_64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: mac-x86-binaries
+        path: build/mac-x86/bin/
+        
+    - name: Download macOS ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: mac-arm-binaries
+        path: build/mac-arm/bin/
+        
+    - name: Install test dependencies
+      run: |
+        brew install llvm
+        clang --version
+        
+    - name: Test macOS builds
+      run: ./scripts/test.sh mac-x86 mac-arm
+
+  # Final summary job
+  summary:
+    name: Build and Test Summary
+    needs: [test-linux-x86, test-linux-arm, test-macos]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Summarize results
+      run: |
+        echo "Cross-Platform Build and Test Summary"
+        echo "-------------------------------------"
+        echo "Linux x86_64: ${{ needs.test-linux-x86.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "Linux ARM64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "macOS: ${{ needs.test-macos.result == 'success' && 'PASS' || 'FAIL' }}"
+        
+        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" ]]; then
+          echo "Some builds or tests failed!"
+          exit 1
+        else
+          echo "All builds and tests passed!"
+        fi
