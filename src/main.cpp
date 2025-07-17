@@ -2,7 +2,6 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <memory>
 #include <algorithm>
 
 // A simple function using modern C++ features

@@ -1,6 +1,6 @@
 # CrossCompileCppExample
 
-A simple C++ project demonstrating cross-compilation for multiple architectures using Clang with C++23 support, bash build scripts, and Docker containers.
+A simple C++ project demonstrating cross-compilation for multiple architectures (Linux and macOS) using Clang with C++23 support, bash build scripts, and Docker containers.
 
 ## Prerequisites
 
@@ -19,81 +19,150 @@ A simple C++ project demonstrating cross-compilation for multiple architectures 
 
 ## Build Instructions
 
-### 1. Build for Linux x86_64 (with Docker)
+### 1. Build for Linux x86_64
 
 ```bash
-# Build only for x86_64
-./scripts/docker-build.sh --x86_64
-
-# Or use the default option (which builds for x86_64)
-./scripts/docker-build.sh
+# Build for Linux x86_64
+./scripts/build.sh linux-x86
 ```
 
-### 2. Build for Linux ARM64 (with Docker)
+### 2. Build for Linux ARM64
 
 ```bash
-# Build only for ARM64
-./scripts/docker-build.sh --arm64
+# Build for Linux ARM64
+./scripts/build.sh linux-arm
 ```
 
-### 3. Build for Both Architectures (with Docker)
+### 3. Build for macOS x86_64
 
 ```bash
-# Build for both x86_64 and ARM64
-./scripts/docker-build.sh --all
+# Build for macOS x86_64
+./scripts/build.sh mac-x86
 ```
 
-### 4. Clean and Build (with Docker)
+### 4. Build for macOS ARM64
 
 ```bash
-# Clean and build for both architectures
-./scripts/docker-build.sh --all --clean
+# Build for macOS ARM64
+./scripts/build.sh mac-arm
+```
+
+### 5. Clean and Build
+
+```bash
+# Clean all build directories
+./scripts/build.sh --clean
+
+# Clean and build for a specific architecture
+./scripts/build.sh --clean linux-x86
+```
+
+### 6. Show Build Help
+
+```bash
+# Show build help
+./scripts/build.sh --help
 ```
 
 ## Run Instructions
 
-### 5. Run Locally (Linux x86_64)
-
-If you're on a Linux x86_64 system, you can run the built executable directly:
+### 1. Run Linux x86_64 Binary
 
 ```bash
-# Run the x86_64 executable
-./build/x86_64/bin/app
+# Run the Linux x86_64 binary
+./scripts/run.sh linux-x86
 
 # Run with arguments
-./build/x86_64/bin/app arg1 arg2 "argument with spaces"
+./scripts/run.sh linux-x86 -- arg1 arg2 "argument with spaces"
 ```
 
-### 6. Run with Docker (Linux x86_64)
+### 2. Run Linux ARM64 Binary (with QEMU Emulation)
 
 ```bash
-# Run the x86_64 executable in Docker
-docker compose -f docker/docker-compose.yml run --rm x86_64 /app/build/x86_64/bin/app
+# Run the Linux ARM64 binary using Docker with QEMU emulation
+./scripts/run.sh linux-arm
 
 # Run with arguments
-docker compose -f docker/docker-compose.yml run --rm x86_64 /app/build/x86_64/bin/app arg1 arg2 "argument with spaces"
+./scripts/run.sh linux-arm -- arg1 arg2 "argument with spaces"
 ```
 
-### 7. Run with Docker (Linux ARM64)
-
-To run ARM64 binaries on an x86_64 host, you need to set up QEMU emulation. This requires additional configuration:
+### 3. Run macOS x86_64 Binary (with Emulation)
 
 ```bash
-# Enable QEMU for ARM64 emulation (run once per system boot)
-sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-
-# Run the ARM64 executable in Docker with QEMU emulation
-docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:24.04 /app/build/arm64/bin/app
+# Run the macOS x86_64 binary using emulation
+./scripts/run.sh mac-x86
 
 # Run with arguments
-docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:24.04 /app/build/arm64/bin/app arg1 arg2 "argument with spaces"
+./scripts/run.sh mac-x86 -- arg1 arg2 "argument with spaces"
 ```
 
-**Note:** The ARM64 executable cannot be run directly with our standard Docker Compose setup without additional configuration, as it requires proper architecture emulation.
+### 4. Run macOS ARM64 Binary (with Emulation)
+
+```bash
+# Run the macOS ARM64 binary using emulation
+./scripts/run.sh mac-arm
+
+# Run with arguments
+./scripts/run.sh mac-arm -- arg1 arg2 "argument with spaces"
+```
+
+### 5. Show Run Help
+
+```bash
+# Show run help
+./scripts/run.sh --help
+```
+
+**Note:** The macOS binaries are run in a simulated environment. In a real-world scenario, you would need proper macOS emulation or native hardware to run these binaries.
+
+## Testing
+
+The project includes a test script that automates building, running, and verifying output for all supported architectures.
+
+### 1. Test All Architectures
+
+```bash
+# Test all architectures
+./scripts/test.sh
+```
+
+### 2. Test Specific Architecture
+
+```bash
+# Test Linux x86_64
+./scripts/test.sh linux-x86
+
+# Test Linux ARM64
+./scripts/test.sh linux-arm
+
+# Test macOS x86_64
+./scripts/test.sh mac-x86
+
+# Test macOS ARM64
+./scripts/test.sh mac-arm
+```
+
+### 3. Clean and Test
+
+```bash
+# Clean and test all architectures
+./scripts/test.sh --clean
+
+# Clean and test specific architecture
+./scripts/test.sh --clean linux-x86
+```
+
+### 4. Show Test Help
+
+```bash
+# Show test help
+./scripts/test.sh --help
+```
 
 ## Notes
 
 - The ARM64 executable cannot be run directly on an x86_64 system without emulation.
+- The macOS binaries are run in a simulated environment. In a real-world scenario, you would need proper macOS emulation or native hardware to run these binaries.
 - Docker provides the necessary environment for cross-compilation and execution.
 - All build artifacts are stored in the `build/` directory, organized by architecture.
 - The project uses Clang with C++23 support (via the `-std=c++2b` flag).

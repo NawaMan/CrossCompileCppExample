@@ -2,11 +2,19 @@
 set -e
 
 # Build script for C++ cross-compilation
-# This script builds the project using Docker for consistent environment
+# This script builds the project using Docker for consistent environment locally
+# or directly on the host when running in CI environments
 
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCKER_DIR="${PROJECT_ROOT}/docker"
+
+# Detect if running in GitHub Actions
+IN_GITHUB_ACTIONS=false
+if [ -n "$GITHUB_ACTIONS" ]; then
+  IN_GITHUB_ACTIONS=true
+  echo "Running in GitHub Actions environment - will build directly on runner"
+fi
 
 # No default architecture - must be explicitly specified
 ARCH=""
@@ -23,6 +31,14 @@ while [[ $# -gt 0 ]]; do
       ARCH="linux-arm"
       shift
       ;;
+    mac-x86)
+      ARCH="mac-x86"
+      shift
+      ;;
+    mac-arm)
+      ARCH="mac-arm"
+      shift
+      ;;
     --clean)
       CLEAN_MODE=true
       shift
@@ -32,8 +48,11 @@ while [[ $# -gt 0 ]]; do
       echo "Architectures:"
       echo "  linux-x86    Build for Linux x86_64 architecture"
       echo "  linux-arm    Build for Linux ARM64 architecture"
+      echo "  mac-x86      Build for macOS x86_64 architecture"
+      echo "  mac-arm      Build for macOS ARM64 architecture"
       echo "Options:"
       echo "  --clean      Clean build directories before building"
+      echo "  -h, --help   Show this help message"
       exit 0
       ;;
     *)
@@ -48,10 +67,15 @@ done
 # If clean mode is enabled without an architecture, clean all build directories
 if [ "${CLEAN_MODE}" = true ] && [ -z "$ARCH" ]; then
   echo "Cleaning all build directories..."
-  docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
-    rm -rf /app/build
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    rm -rf "${PROJECT_ROOT}/build"
     echo 'All build directories have been cleaned.'
-  "
+  else
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
+      rm -rf /app/build
+      echo 'All build directories have been cleaned.'
+    "
+  fi
   exit 0
 fi
 
@@ -61,51 +85,89 @@ if [ -z "$ARCH" ]; then
   echo "Architectures:"
   echo "  linux-x86    Build for Linux x86_64 architecture"
   echo "  linux-arm    Build for Linux ARM64 architecture"
+  echo "  mac-x86      Build for macOS x86_64 architecture"
+  echo "  mac-arm      Build for macOS ARM64 architecture"
   echo "Options:"
   echo "  --clean      Clean build directories before building"
   echo "  -h, --help   Show this help message"
   exit 0
 fi
 
-# Check if Docker is installed
-if ! command -v docker &> /dev/null; then
-    echo "Error: Docker is not installed or not in PATH"
-    exit 1
-fi
+# Check if Docker is needed and available when not in GitHub Actions
+if [ "$IN_GITHUB_ACTIONS" = false ]; then
+  # Check if Docker is installed
+  if ! command -v docker &> /dev/null; then
+      echo "Error: Docker is not installed or not in PATH"
+      exit 1
+  fi
 
-# Check if Docker Compose is installed
-if ! command -v docker compose &> /dev/null; then
-    echo "Error: Docker Compose is not installed or not in PATH"
-    exit 1
-fi
+  # Check if Docker Compose is installed
+  if ! command -v docker compose &> /dev/null; then
+      echo "Error: Docker Compose is not installed or not in PATH"
+      exit 1
+  fi
 
-# Build the Docker image if needed
-echo "Building or updating Docker image..."
-docker compose -f "${DOCKER_DIR}/docker-compose.yml" build
+  # Build the Docker image if needed
+  echo "Building or updating Docker image..."
+  docker compose -f "${DOCKER_DIR}/docker-compose.yml" build
+fi
 
 # Set up build directories and variables based on architecture
-SRC_DIR="/app/src"
-INCLUDE_DIR="/app/include"
-BUILD_DIR="/app/build/${ARCH}"
-BIN_DIR="${BUILD_DIR}/bin"
-
-# Determine compiler flags based on architecture
-if [ "${ARCH}" = "linux-arm" ]; then
-    CROSS_TRIPLE="aarch64-linux-gnu"
-    COMPILER_FLAGS="-std=c++2b -Wall -Wextra -pedantic -O2 -I${INCLUDE_DIR} --target=${CROSS_TRIPLE}"
-    LINKER_FLAGS="--target=${CROSS_TRIPLE}"
-    echo "Building for Linux ARM64 architecture"
-elif [ "${ARCH}" = "linux-x86" ]; then
-    COMPILER_FLAGS="-std=c++2b -Wall -Wextra -pedantic -O2 -I${INCLUDE_DIR}"
-    LINKER_FLAGS=""
-    echo "Building for Linux x86_64 architecture"
+if [ "$IN_GITHUB_ACTIONS" = true ]; then
+  # Use local paths when in GitHub Actions
+  SRC_DIR="${PROJECT_ROOT}/src"
+  INCLUDE_DIR="${PROJECT_ROOT}/include"
+  BUILD_DIR="${PROJECT_ROOT}/build/${ARCH}"
+  BIN_DIR="${BUILD_DIR}/bin"
 else
-    echo "Error: Unsupported architecture: ${ARCH}"
-    exit 1
+  # Use Docker container paths
+  SRC_DIR="/app/src"
+  INCLUDE_DIR="/app/include"
+  BUILD_DIR="/app/build/${ARCH}"
+  BIN_DIR="${BUILD_DIR}/bin"
 fi
 
-# Run the build inside the Docker container
-echo "Running build in Docker container..."
+# Determine compiler flags based on architecture
+if [ "$ARCH" = "linux-x86" ]; then
+  echo "Building for Linux x86_64 architecture"
+  COMPILER="clang++"
+  ARCH_FLAGS=""
+  SYSROOT_FLAGS=""
+elif [ "$ARCH" = "linux-arm" ]; then
+  echo "Building for Linux ARM64 architecture"
+  COMPILER="clang++"
+  ARCH_FLAGS="--target=aarch64-linux-gnu -march=armv8-a"
+  SYSROOT_FLAGS=""
+elif [ "$ARCH" = "mac-x86" ]; then
+  echo "Building for macOS x86_64 architecture"
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Use native clang on macOS runner
+    COMPILER="clang++"
+    ARCH_FLAGS="-target x86_64-apple-macos11"
+    SYSROOT_FLAGS=""
+  else
+    # Use cross-compiler in Docker
+    COMPILER="x86_64-apple-darwin-clang++"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS="-isysroot /opt/osxcross/SDK/MacOSX12.3.sdk"
+  fi
+elif [ "$ARCH" = "mac-arm" ]; then
+  echo "Building for macOS ARM64 architecture"
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Use native clang on macOS runner
+    COMPILER="clang++"
+    ARCH_FLAGS="-target arm64-apple-macos11"
+    SYSROOT_FLAGS=""
+  else
+    # Use cross-compiler in Docker
+    COMPILER="arm64-apple-darwin-clang++"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS="-isysroot /opt/osxcross/SDK/MacOSX12.3.sdk"
+  fi
+else
+  echo "Error: Unknown architecture: $ARCH"
+  exit 1
+fi
 
 # Set clean command if clean mode is enabled
 CLEAN_CMD=""
@@ -114,48 +176,70 @@ if [ "${CLEAN_MODE}" = true ]; then
   CLEAN_CMD="rm -rf \"${BUILD_DIR}\" && "
 fi
 
-docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "${CLEAN_CMD}
-    set -e
-    
-    # Print build information
-    echo \"Using compiler: clang++\"
-    echo \"C++ standard: C++23 (via -std=c++2b flag)\"
-    echo \"Source directory: ${SRC_DIR}\"
-    echo \"Include directory: ${INCLUDE_DIR}\"
-    echo \"Build directory: ${BUILD_DIR}\"
-    echo \"Binary directory: ${BIN_DIR}\"
-    
-    # Create build directories
-    mkdir -p \"${BIN_DIR}\"
-    
-    # Find all .cpp files in the source directory
-    CPP_FILES=\$(find \"${SRC_DIR}\" -maxdepth 1 -name \"*.cpp\")
-    
-    # Compile each source file
-    for cpp_file in \${CPP_FILES}; do
-        filename=\$(basename \"\${cpp_file}\")
-        object_name=\"\${filename%.cpp}.o\"
-        object_file=\"${BUILD_DIR}/\${object_name}\"
-        
-        echo \"Compiling \${cpp_file} -> \${object_file}\"
-        clang++ ${COMPILER_FLAGS} -c \"\${cpp_file}\" -o \"\${object_file}\"
-    done
-    
-    # Link all object files into the final executable
-    OBJECT_FILES=\$(find \"${BUILD_DIR}\" -maxdepth 1 -name \"*.o\")
-    EXECUTABLE=\"${BIN_DIR}/app\"
-    
-    echo \"Linking \${EXECUTABLE}\"
-    clang++ ${LINKER_FLAGS} \${OBJECT_FILES} -o \"\${EXECUTABLE}\"
-    
-    if [ \"${ARCH}\" = \"linux-arm\" ]; then
-        echo \"Cross-compilation completed successfully!\"
-        echo \"Executable location: \${EXECUTABLE}\"
-        echo \"Note: This executable is built for ARM64 and cannot be run on x86_64 without emulation.\"
-    else
-        echo \"Build completed successfully!\"
-        echo \"Executable location: \${EXECUTABLE}\"
-    fi
-"
+# Build script content
+BUILD_SCRIPT_CONTENT="#!/bin/bash
+set -e
+
+${CLEAN_CMD}
+
+# Print build information
+echo \"Using compiler: ${COMPILER}\"
+echo \"C++ standard: C++23 (via -std=c++2b flag)\"
+echo \"Source directory: ${SRC_DIR}\"
+echo \"Include directory: ${INCLUDE_DIR}\"
+echo \"Build directory: ${BUILD_DIR}\"
+echo \"Binary directory: ${BIN_DIR}\"
+
+# Create build directories
+mkdir -p \"${BUILD_DIR}\"
+mkdir -p \"${BIN_DIR}\"
+
+# Compile source files
+for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
+    obj_file=\"${BUILD_DIR}/\$(basename \"\${src_file}\" .cpp).o\"
+    echo \"Compiling \${src_file} -> \${obj_file}\"
+    ${COMPILER} -std=c++2b -c \"\${src_file}\" -o \"\${obj_file}\" -I\"${INCLUDE_DIR}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+done
+
+# Link object files
+echo \"Linking ${BIN_DIR}/app\"
+${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+
+if [ \"${ARCH}\" = \"linux-arm\" ]; then
+    echo \"Cross-compilation completed successfully!\"
+    echo \"Executable location: ${BIN_DIR}/app\"
+    echo \"Note: This executable is built for ARM64 and cannot be run on x86_64 without emulation.\"
+elif [ \"${ARCH}\" = \"mac-x86\" ] || [ \"${ARCH}\" = \"mac-arm\" ]; then
+    echo \"macOS cross-compilation completed successfully!\"
+    echo \"Executable location: ${BIN_DIR}/app\"
+    echo \"Note: This executable is built for macOS and cannot be run on Linux without proper emulation.\"
+else
+    echo \"Build completed successfully!\"
+    echo \"Executable location: ${BIN_DIR}/app\"
+fi"
+
+if [ "$IN_GITHUB_ACTIONS" = true ]; then
+  # Run build script directly on the host when in GitHub Actions
+  echo "Running build directly on runner..."
+  eval "$BUILD_SCRIPT_CONTENT"
+else
+  # Run the build inside the Docker container
+  echo "Running build in Docker container..."
+  
+  # Create a temporary build script
+  BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
+  
+  # Create the build script with proper commands
+  echo "$BUILD_SCRIPT_CONTENT" > "${BUILD_SCRIPT}"
+  
+  # Make the script executable
+  chmod +x "${BUILD_SCRIPT}"
+  
+  # Run the build script inside the Docker container
+  docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+  
+  # Clean up the temporary script
+  rm -f "${BUILD_SCRIPT}"
+fi
 
 echo "${ARCH} build completed!"

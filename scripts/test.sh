@@ -2,27 +2,42 @@
 set -e
 
 # Test script for C++ cross-compilation
-# This script builds, runs, and verifies the output for both architectures
+# This script builds, runs, and verifies the output for all architectures
 
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_SCRIPT="${PROJECT_ROOT}/scripts/build.sh"
 RUN_SCRIPT="${PROJECT_ROOT}/scripts/run.sh"
 
+# Detect if running in GitHub Actions
+IN_GITHUB_ACTIONS=false
+if [ -n "$GITHUB_ACTIONS" ]; then
+  IN_GITHUB_ACTIONS=true
+  echo "Running in GitHub Actions environment"
+fi
+
+# Detect host OS
+HOST_OS="linux"
+if [[ "$(uname)" == "Darwin" ]]; then
+  HOST_OS="macos"
+  echo "Detected macOS host environment"
+fi
+
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Parse command-line arguments
-ARCH=""
+ARCHS=()
 CLEAN=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    linux-x86|linux-arm)
-      ARCH="$1"
+    linux-x86|linux-arm|mac-x86|mac-arm)
+      ARCHS+=("$1")
       shift
       ;;
     --clean)
@@ -37,7 +52,9 @@ while [[ $# -gt 0 ]]; do
       echo "Architecture:"
       echo "  linux-x86    Test Linux x86_64 build and run"
       echo "  linux-arm    Test Linux ARM64 build and run"
-      echo "  (none)       Test both architectures"
+      echo "  mac-x86      Test macOS x86_64 build and run"
+      echo "  mac-arm      Test macOS ARM64 build and run"
+      echo "  (none)       Test all architectures"
       exit 0
       ;;
     *)
@@ -116,44 +133,131 @@ run_test() {
   return 0
 }
 
-# Run tests based on architecture parameter
-if [ -n "$ARCH" ]; then
-  # Test specific architecture
-  run_test $ARCH
+# Run tests based on architecture parameters
+if [ ${#ARCHS[@]} -gt 0 ]; then
+  # Test specific architectures
+  for ARCH in "${ARCHS[@]}"; do
+    if [[ ("$ARCH" == "mac-x86" || "$ARCH" == "mac-arm") && "$HOST_OS" != "macos" ]]; then
+      print_header "Building for $ARCH (skipping test)"
+      $BUILD_SCRIPT $ARCH
+      echo -e "${YELLOW}Note: macOS binaries cannot be tested on Linux${NC}"
+      
+      # Set result variables
+      if [ "$ARCH" == "mac-x86" ]; then
+        MAC_X86_RESULT="SKIP"
+      elif [ "$ARCH" == "mac-arm" ]; then
+        MAC_ARM_RESULT="SKIP"
+      fi
+    else
+      run_test $ARCH
+      
+      # Set result variables based on the return value
+      if [ $? -eq 0 ]; then
+        if [ "$ARCH" == "linux-x86" ]; then
+          LINUX_X86_RESULT="PASS"
+        elif [ "$ARCH" == "linux-arm" ]; then
+          LINUX_ARM_RESULT="PASS"
+        elif [ "$ARCH" == "mac-x86" ]; then
+          MAC_X86_RESULT="PASS"
+        elif [ "$ARCH" == "mac-arm" ]; then
+          MAC_ARM_RESULT="PASS"
+        fi
+      else
+        if [ "$ARCH" == "linux-x86" ]; then
+          LINUX_X86_RESULT="FAIL"
+        elif [ "$ARCH" == "linux-arm" ]; then
+          LINUX_ARM_RESULT="FAIL"
+        elif [ "$ARCH" == "mac-x86" ]; then
+          MAC_X86_RESULT="FAIL"
+        elif [ "$ARCH" == "mac-arm" ]; then
+          MAC_ARM_RESULT="FAIL"
+        fi
+      fi
+    fi
+  done
 else
-  # Test both architectures
-  print_header "Running tests for all architectures"
+  # Test all architectures
+  # Initialize result variables
+  LINUX_X86_RESULT=""
+  LINUX_ARM_RESULT=""
+  MAC_X86_RESULT=""
+  MAC_ARM_RESULT=""
   
   # Test linux-x86
   if run_test "linux-x86"; then
-    X86_RESULT="PASS"
+    LINUX_X86_RESULT="PASS"
   else
-    X86_RESULT="FAIL"
+    LINUX_X86_RESULT="FAIL"
   fi
   
   # Test linux-arm
   if run_test "linux-arm"; then
-    ARM_RESULT="PASS"
+    LINUX_ARM_RESULT="PASS"
   else
-    ARM_RESULT="FAIL"
+    LINUX_ARM_RESULT="FAIL"
+  fi
+  
+  # Test or build mac-x86
+  if [ "$HOST_OS" == "macos" ]; then
+    if run_test "mac-x86"; then
+      MAC_X86_RESULT="PASS"
+    else
+      MAC_X86_RESULT="FAIL"
+    fi
+  else
+    print_header "Building for mac-x86 (skipping test)"
+    $BUILD_SCRIPT mac-x86
+    echo -e "${YELLOW}Note: macOS binaries cannot be tested on Linux${NC}"
+    MAC_X86_RESULT="SKIP"
+  fi
+  
+  # Test or build mac-arm
+  if [ "$HOST_OS" == "macos" ]; then
+    if run_test "mac-arm"; then
+      MAC_ARM_RESULT="PASS"
+    else
+      MAC_ARM_RESULT="FAIL"
+    fi
+  else
+    print_header "Building for mac-arm (skipping test)"
+    $BUILD_SCRIPT mac-arm
+    echo -e "${YELLOW}Note: macOS binaries cannot be tested on Linux${NC}"
+    MAC_ARM_RESULT="SKIP"
   fi
   
   # Print summary
   print_header "Test Summary"
-  if [ "$X86_RESULT" = "PASS" ]; then
-    echo -e "linux-x86: ${GREEN}${X86_RESULT}${NC}"
+  if [ "$LINUX_X86_RESULT" = "PASS" ]; then
+    echo -e "linux-x86: ${GREEN}${LINUX_X86_RESULT}${NC}"
   else
-    echo -e "linux-x86: ${RED}${X86_RESULT}${NC}"
+    echo -e "linux-x86: ${RED}${LINUX_X86_RESULT}${NC}"
   fi
   
-  if [ "$ARM_RESULT" = "PASS" ]; then
-    echo -e "linux-arm: ${GREEN}${ARM_RESULT}${NC}"
+  if [ "$LINUX_ARM_RESULT" = "PASS" ]; then
+    echo -e "linux-arm: ${GREEN}${LINUX_ARM_RESULT}${NC}"
   else
-    echo -e "linux-arm: ${RED}${ARM_RESULT}${NC}"
+    echo -e "linux-arm: ${RED}${LINUX_ARM_RESULT}${NC}"
+  fi
+  
+  if [ "$MAC_X86_RESULT" = "SKIP" ]; then
+    echo -e "mac-x86: ${BLUE}${MAC_X86_RESULT}${NC}"
+  elif [ "$MAC_X86_RESULT" = "PASS" ]; then
+    echo -e "mac-x86: ${GREEN}${MAC_X86_RESULT}${NC}"
+  else
+    echo -e "mac-x86: ${RED}${MAC_X86_RESULT}${NC}"
+  fi
+  
+  if [ "$MAC_ARM_RESULT" = "SKIP" ]; then
+    echo -e "mac-arm: ${BLUE}${MAC_ARM_RESULT}${NC}"
+  elif [ "$MAC_ARM_RESULT" = "PASS" ]; then
+    echo -e "mac-arm: ${GREEN}${MAC_ARM_RESULT}${NC}"
+  else
+    echo -e "mac-arm: ${RED}${MAC_ARM_RESULT}${NC}"
   fi
   
   # Exit with error if any test failed
-  if [ "$X86_RESULT" = "FAIL" ] || [ "$ARM_RESULT" = "FAIL" ]; then
+  if [ "$LINUX_X86_RESULT" = "FAIL" ] || [ "$LINUX_ARM_RESULT" = "FAIL" ] || \
+     ([ "$HOST_OS" == "macos" ] && ([ "$MAC_X86_RESULT" = "FAIL" ] || [ "$MAC_ARM_RESULT" = "FAIL" ])); then
     exit 1
   fi
 fi

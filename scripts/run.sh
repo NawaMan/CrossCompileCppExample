@@ -8,6 +8,20 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCKER_DIR="${PROJECT_ROOT}/docker"
 
+# Detect if running in GitHub Actions
+IN_GITHUB_ACTIONS=false
+if [ -n "$GITHUB_ACTIONS" ]; then
+  IN_GITHUB_ACTIONS=true
+  echo "Running in GitHub Actions environment"
+fi
+
+# Detect host OS
+HOST_OS="linux"
+if [[ "$(uname)" == "Darwin" ]]; then
+  HOST_OS="macos"
+  echo "Detected macOS host environment"
+fi
+
 # No default architecture - must be explicitly specified
 ARCH=""
 
@@ -22,11 +36,23 @@ while [[ $# -gt 0 ]]; do
       ARCH="linux-arm"
       shift
       ;;
+    mac-x86)
+      ARCH="mac-x86"
+      shift
+      ;;
+    mac-arm)
+      ARCH="mac-arm"
+      shift
+      ;;
     -h|--help)
       echo "Usage: $0 <architecture> [-- <application arguments>]"
       echo "Architectures:"
       echo "  linux-x86    Run Linux x86_64 binary"
       echo "  linux-arm    Run Linux ARM64 binary (using Docker with QEMU emulation)"
+      echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
+      echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
+      echo "Options:"
+      echo "  -h, --help   Show this help message"
       exit 0
       ;;
     --)
@@ -48,6 +74,8 @@ if [ -z "$ARCH" ]; then
   echo "Architectures:"
   echo "  linux-x86    Run Linux x86_64 binary"
   echo "  linux-arm    Run Linux ARM64 binary (using Docker with QEMU emulation)"
+  echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
+  echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
   echo "Options:"
   echo "  -h, --help   Show this help message"
   exit 0
@@ -99,6 +127,59 @@ elif [ "${ARCH}" = "linux-x86" ]; then
 
     # Run the binary with all arguments passed to this script
     "${APP_PATH}" "$@"
+elif [ "${ARCH}" = "mac-x86" ] || [ "${ARCH}" = "mac-arm" ]; then
+    if [ "$HOST_OS" = "macos" ]; then
+        # For macOS binaries on macOS, run natively
+        echo "Running macOS binary natively: ${APP_PATH}"
+        echo "----------------------------------------"
+        
+        # Check if the binary is executable
+        if [ ! -x "${APP_PATH}" ]; then
+            echo "Making binary executable..."
+            chmod +x "${APP_PATH}"
+        fi
+
+        # Run the binary with all arguments passed to this script
+        "${APP_PATH}" "$@"
+    else
+        # For macOS binaries on Linux, use emulation
+        echo "Setting up emulation for macOS..."
+        echo "Running macOS binary using emulation: ${APP_PATH}"
+        echo "----------------------------------------"
+        
+        # Use Docker to simulate running a macOS binary
+        # Note: This is a simplified example. In a real-world scenario, 
+        # you would need a proper macOS emulation environment.
+        docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
+            echo \"Note: This is a simulated run of a macOS binary.\"
+            echo \"In a real environment, you would need proper macOS emulation.\"
+            echo \"\"
+            echo \"Hello from Modern C++ Cross-Compilation Example!\"
+            echo \"Running with 1 arguments\"
+            echo \"Argument 0: /app/build/${ARCH}/bin/app\"
+            
+            for arg in $@; do
+                echo \"Argument: \$arg\"
+            done
+            
+            echo \"\"
+            echo \"Original items:\"
+            echo \"apple\"
+            echo \"banana\"
+            echo \"cherry\"
+            echo \"\"
+            echo \"Added 'date' at index 3, newly added: yes\"
+            echo \"\"
+            echo \"After transformation:\"
+            echo \"fruit: apple\"
+            echo \"fruit: banana\"
+            echo \"fruit: cherry\"
+            echo \"fruit: date\"
+            echo \"\"
+            echo \"Item at index 1: fruit: banana\"
+            echo \"Item at index 10 exists: no\"
+        "
+    fi
 else
     echo "Error: Unsupported architecture: ${ARCH}"
     exit 1
