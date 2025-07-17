@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  x86_64:
+    build:
+      context: ..
+      dockerfile: docker/x86_64.Dockerfile
+    volumes:
+      - ..:/app
+    command: /bin/bash
+    tty: true
+    stdin_open: true
+
+  arm64:
+    build:
+      context: ..
+      dockerfile: docker/arm64.Dockerfile
+    volumes:
+      - ..:/app
+    command: /bin/bash
+    tty: true
+    stdin_open: true
