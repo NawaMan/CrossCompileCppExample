@@ -83,10 +83,10 @@ To run ARM64 binaries on an x86_64 host, you need to set up QEMU emulation. This
 sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
 # Run the ARM64 executable in Docker with QEMU emulation
-docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:22.04 /app/build/arm64/bin/app
+docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:24.04 /app/build/arm64/bin/app
 
 # Run with arguments
-docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:22.04 /app/build/arm64/bin/app arg1 arg2 "argument with spaces"
+docker run --rm -it --platform linux/arm64 -v "$(pwd):/app" ubuntu:24.04 /app/build/arm64/bin/app arg1 arg2 "argument with spaces"
 ```
 
 **Note:** The ARM64 executable cannot be run directly with our standard Docker Compose setup without additional configuration, as it requires proper architecture emulation.
