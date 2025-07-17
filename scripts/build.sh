@@ -39,6 +39,14 @@ while [[ $# -gt 0 ]]; do
       ARCH="mac-arm"
       shift
       ;;
+    win-x86)
+      ARCH="win-x86"
+      shift
+      ;;
+    win-arm)
+      ARCH="win-arm"
+      shift
+      ;;
     --clean)
       CLEAN_MODE=true
       shift
@@ -50,6 +58,8 @@ while [[ $# -gt 0 ]]; do
       echo "  linux-arm    Build for Linux ARM64 architecture"
       echo "  mac-x86      Build for macOS x86_64 architecture"
       echo "  mac-arm      Build for macOS ARM64 architecture"
+      echo "  win-x86      Build for Windows x86_64 architecture"
+      echo "  win-arm      Build for Windows ARM64 architecture"
       echo "Options:"
       echo "  --clean      Clean build directories before building"
       echo "  -h, --help   Show this help message"
@@ -87,6 +97,8 @@ if [ -z "$ARCH" ]; then
   echo "  linux-arm    Build for Linux ARM64 architecture"
   echo "  mac-x86      Build for macOS x86_64 architecture"
   echo "  mac-arm      Build for macOS ARM64 architecture"
+  echo "  win-x86      Build for Windows x86_64 architecture"
+  echo "  win-arm      Build for Windows ARM64 architecture"
   echo "Options:"
   echo "  --clean      Clean build directories before building"
   echo "  -h, --help   Show this help message"
@@ -164,6 +176,18 @@ elif [ "$ARCH" = "mac-arm" ]; then
     ARCH_FLAGS=""
     SYSROOT_FLAGS="-isysroot /opt/osxcross/SDK/MacOSX12.3.sdk"
   fi
+elif [ "$ARCH" = "win-x86" ]; then
+  echo "Building for Windows x86_64 architecture"
+  COMPILER="x86_64-w64-mingw32-clang++"
+  ARCH_FLAGS=""
+  SYSROOT_FLAGS=""
+  EXTENSION=".exe"
+elif [ "$ARCH" = "win-arm" ]; then
+  echo "Building for Windows ARM64 architecture"
+  COMPILER="aarch64-w64-mingw32-clang++"
+  ARCH_FLAGS=""
+  SYSROOT_FLAGS=""
+  EXTENSION=".exe"
 else
   echo "Error: Unknown architecture: $ARCH"
   exit 1
@@ -201,21 +225,28 @@ for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
     ${COMPILER} -std=c++2b -c \"\${src_file}\" -o \"\${obj_file}\" -I\"${INCLUDE_DIR}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
 done
 
+# Set output binary name with extension if needed
+OUTPUT_BINARY=\"app${EXTENSION:-}\"
+
 # Link object files
-echo \"Linking ${BIN_DIR}/app\"
-${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+echo \"Linking ${BIN_DIR}/${OUTPUT_BINARY}\"
+${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/${OUTPUT_BINARY}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
 
 if [ \"${ARCH}\" = \"linux-arm\" ]; then
     echo \"Cross-compilation completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/app\"
+    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
     echo \"Note: This executable is built for ARM64 and cannot be run on x86_64 without emulation.\"
 elif [ \"${ARCH}\" = \"mac-x86\" ] || [ \"${ARCH}\" = \"mac-arm\" ]; then
     echo \"macOS cross-compilation completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/app\"
+    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
     echo \"Note: This executable is built for macOS and cannot be run on Linux without proper emulation.\"
+elif [ \"${ARCH}\" = \"win-x86\" ] || [ \"${ARCH}\" = \"win-arm\" ]; then
+    echo \"Windows cross-compilation completed successfully!\"
+    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
+    echo \"Note: This executable is built for Windows and cannot be run on Linux without proper emulation.\"
 else
     echo \"Build completed successfully!\"
-    echo \"Executable location: ${BIN_DIR}/app\"
+    echo \"Executable location: ${BIN_DIR}/${OUTPUT_BINARY}\"
 fi"
 
 if [ "$IN_GITHUB_ACTIONS" = true ]; then

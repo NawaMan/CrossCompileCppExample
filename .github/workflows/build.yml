@@ -25,7 +25,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
+        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static mingw-w64 wine64
         clang --version
     
     - name: Install macOS build dependencies
@@ -42,6 +42,15 @@ jobs:
     - name: Build Linux ARM64
       if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh linux-arm
+      
+    # Build Windows platforms
+    - name: Build Windows x86_64
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/build.sh win-x86
+      
+    - name: Build Windows ARM64
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/build.sh win-arm
       
     # Build macOS platforms
     - name: Build macOS x86_64
@@ -83,6 +92,22 @@ jobs:
       with:
         name: mac-arm-binaries
         path: build/mac-arm/bin/
+        retention-days: 1
+        
+    - name: Upload Windows x86_64 artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: win-x86-binaries
+        path: build/win-x86/bin/
+        retention-days: 1
+        
+    - name: Upload Windows ARM64 artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: win-arm-binaries
+        path: build/win-arm/bin/
         retention-days: 1
 
   # Test jobs for each platform
@@ -132,6 +157,52 @@ jobs:
     - name: Test Linux ARM64
       run: ./scripts/test.sh linux-arm
 
+  test-windows-x86:
+    name: Test Windows x86_64
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Windows x86_64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: win-x86-binaries
+        path: build/win-x86/bin/
+      
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm lld build-essential mingw-w64 wine64
+      
+    - name: Test Windows x86_64
+      run: ./scripts/test.sh win-x86
+
+  test-windows-arm:
+    name: Test Windows ARM64
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Windows ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: win-arm-binaries
+        path: build/win-arm/bin/
+      
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm lld build-essential mingw-w64
+      
+    - name: Test Windows ARM64
+      run: ./scripts/test.sh win-arm
+
   # Test macOS binaries on macOS runner
   test-macos:
     name: Test macOS Builds
@@ -165,7 +236,7 @@ jobs:
   # Final summary job
   summary:
     name: Build and Test Summary
-    needs: [test-linux-x86, test-linux-arm, test-macos]
+    needs: [test-linux-x86, test-linux-arm, test-macos, test-windows-x86, test-windows-arm]
     runs-on: ubuntu-latest
     if: always()
     
@@ -177,8 +248,10 @@ jobs:
         echo "Linux x86_64: ${{ needs.test-linux-x86.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "Linux ARM64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "macOS: ${{ needs.test-macos.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "Windows x86_64: ${{ needs.test-windows-x86.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "Windows ARM64: ${{ needs.test-windows-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         
-        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" ]]; then
+        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" || "${{ needs.test-windows-arm.result }}" != "success" ]]; then
           echo "Some builds or tests failed!"
           exit 1
         else

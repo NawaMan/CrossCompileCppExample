@@ -36,7 +36,7 @@ CLEAN=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    linux-x86|linux-arm|mac-x86|mac-arm)
+    linux-x86|linux-arm|mac-x86|mac-arm|win-x86|win-arm)
       ARCHS+=("$1")
       shift
       ;;
@@ -54,6 +54,8 @@ while [[ $# -gt 0 ]]; do
       echo "  linux-arm    Test Linux ARM64 build and run"
       echo "  mac-x86      Test macOS x86_64 build and run"
       echo "  mac-arm      Test macOS ARM64 build and run"
+      echo "  win-x86      Test Windows x86_64 build and run"
+      echo "  win-arm      Test Windows ARM64 build and run"
       echo "  (none)       Test all architectures"
       exit 0
       ;;
@@ -148,6 +150,29 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
       elif [ "$ARCH" == "mac-arm" ]; then
         MAC_ARM_RESULT="SKIP"
       fi
+    elif [[ "$ARCH" == "win-x86" ]]; then
+      print_header "Building for $ARCH"
+      $BUILD_SCRIPT $ARCH
+      
+      # Set up Wine for testing Windows binaries
+      if command -v wine &> /dev/null || [ "$IN_GITHUB_ACTIONS" = true ]; then
+        run_test $ARCH
+        
+        # Set result variables based on the return value
+        if [ $? -eq 0 ]; then
+          WIN_X86_RESULT="PASS"
+        else
+          WIN_X86_RESULT="FAIL"
+        fi
+      else
+        echo -e "${YELLOW}Note: Wine is not installed. Windows x86_64 binaries can be built but not tested${NC}"
+        WIN_X86_RESULT="SKIP"
+      fi
+    elif [[ "$ARCH" == "win-arm" ]]; then
+      print_header "Building for $ARCH (skipping test)"
+      $BUILD_SCRIPT $ARCH
+      echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
+      WIN_ARM_RESULT="SKIP"
     else
       run_test $ARCH
       
@@ -161,6 +186,10 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
           MAC_X86_RESULT="PASS"
         elif [ "$ARCH" == "mac-arm" ]; then
           MAC_ARM_RESULT="PASS"
+        elif [ "$ARCH" == "win-x86" ]; then
+          WIN_X86_RESULT="PASS"
+        elif [ "$ARCH" == "win-arm" ]; then
+          WIN_ARM_RESULT="PASS"
         fi
       else
         if [ "$ARCH" == "linux-x86" ]; then
@@ -171,6 +200,10 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
           MAC_X86_RESULT="FAIL"
         elif [ "$ARCH" == "mac-arm" ]; then
           MAC_ARM_RESULT="FAIL"
+        elif [ "$ARCH" == "win-x86" ]; then
+          WIN_X86_RESULT="FAIL"
+        elif [ "$ARCH" == "win-arm" ]; then
+          WIN_ARM_RESULT="FAIL"
         fi
       fi
     fi
@@ -182,6 +215,8 @@ else
   LINUX_ARM_RESULT=""
   MAC_X86_RESULT=""
   MAC_ARM_RESULT=""
+  WIN_X86_RESULT=""
+  WIN_ARM_RESULT=""
   
   # Test linux-x86
   if run_test "linux-x86"; then
@@ -225,6 +260,26 @@ else
     MAC_ARM_RESULT="SKIP"
   fi
   
+  # Test or build win-x86
+  if command -v wine &> /dev/null || [ "$IN_GITHUB_ACTIONS" = true ]; then
+    if run_test "win-x86"; then
+      WIN_X86_RESULT="PASS"
+    else
+      WIN_X86_RESULT="FAIL"
+    fi
+  else
+    print_header "Building for win-x86 (skipping test)"
+    $BUILD_SCRIPT win-x86
+    echo -e "${YELLOW}Note: Wine is not installed. Windows binaries can be built but not tested${NC}"
+    WIN_X86_RESULT="SKIP"
+  fi
+  
+  # Build win-arm (skipping test)
+  print_header "Building for win-arm (skipping test)"
+  $BUILD_SCRIPT win-arm
+  echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
+  WIN_ARM_RESULT="SKIP"
+  
   # Print summary
   print_header "Test Summary"
   if [ "$LINUX_X86_RESULT" = "PASS" ]; then
@@ -255,9 +310,26 @@ else
     echo -e "mac-arm: ${RED}${MAC_ARM_RESULT}${NC}"
   fi
   
+  if [ "$WIN_X86_RESULT" = "SKIP" ]; then
+    echo -e "win-x86: ${BLUE}${WIN_X86_RESULT}${NC}"
+  elif [ "$WIN_X86_RESULT" = "PASS" ]; then
+    echo -e "win-x86: ${GREEN}${WIN_X86_RESULT}${NC}"
+  else
+    echo -e "win-x86: ${RED}${WIN_X86_RESULT}${NC}"
+  fi
+  
+  if [ "$WIN_ARM_RESULT" = "SKIP" ]; then
+    echo -e "win-arm: ${BLUE}${WIN_ARM_RESULT}${NC}"
+  elif [ "$WIN_ARM_RESULT" = "PASS" ]; then
+    echo -e "win-arm: ${GREEN}${WIN_ARM_RESULT}${NC}"
+  else
+    echo -e "win-arm: ${RED}${WIN_ARM_RESULT}${NC}"
+  fi
+  
   # Exit with error if any test failed
   if [ "$LINUX_X86_RESULT" = "FAIL" ] || [ "$LINUX_ARM_RESULT" = "FAIL" ] || \
-     ([ "$HOST_OS" == "macos" ] && ([ "$MAC_X86_RESULT" = "FAIL" ] || [ "$MAC_ARM_RESULT" = "FAIL" ])); then
+     ([ "$HOST_OS" == "macos" ] && ([ "$MAC_X86_RESULT" = "FAIL" ] || [ "$MAC_ARM_RESULT" = "FAIL" ])) || \
+     [ "$WIN_X86_RESULT" = "FAIL" ] || [ "$WIN_ARM_RESULT" = "FAIL" ]; then
     exit 1
   fi
 fi

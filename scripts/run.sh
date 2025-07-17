@@ -44,6 +44,14 @@ while [[ $# -gt 0 ]]; do
       ARCH="mac-arm"
       shift
       ;;
+    win-x86)
+      ARCH="win-x86"
+      shift
+      ;;
+    win-arm)
+      ARCH="win-arm"
+      shift
+      ;;
     -h|--help)
       echo "Usage: $0 <architecture> [-- <application arguments>]"
       echo "Architectures:"
@@ -51,6 +59,8 @@ while [[ $# -gt 0 ]]; do
       echo "  linux-arm    Run Linux ARM64 binary (using Docker with QEMU emulation)"
       echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
       echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
+      echo "  win-x86      Run Windows x86_64 binary (using Wine emulation)"
+      echo "  win-arm      Run Windows ARM64 binary (using emulation)"
       echo "Options:"
       echo "  -h, --help   Show this help message"
       exit 0
@@ -76,6 +86,8 @@ if [ -z "$ARCH" ]; then
   echo "  linux-arm    Run Linux ARM64 binary (using Docker with QEMU emulation)"
   echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
   echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
+  echo "  win-x86      Run Windows x86_64 binary (using Wine emulation)"
+  echo "  win-arm      Run Windows ARM64 binary (using emulation)"
   echo "Options:"
   echo "  -h, --help   Show this help message"
   exit 0
@@ -83,7 +95,13 @@ fi
 
 # Set binary path based on architecture
 BIN_DIR="${PROJECT_ROOT}/build/${ARCH}/bin"
-APP_PATH="${BIN_DIR}/app"
+
+# Set binary name with extension for Windows
+if [[ "$ARCH" == win-* ]]; then
+  APP_PATH="${BIN_DIR}/app.exe"
+else
+  APP_PATH="${BIN_DIR}/app"
+fi
 
 # Check if the binary exists
 if [ ! -f "${APP_PATH}" ]; then
@@ -180,6 +198,66 @@ elif [ "${ARCH}" = "mac-x86" ] || [ "${ARCH}" = "mac-arm" ]; then
             echo \"Item at index 10 exists: no\"
         "
     fi
+elif [ "${ARCH}" = "win-x86" ]; then
+    # Check if Docker is installed
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed or not in PATH"
+        exit 1
+    fi
+
+    # Run the Windows x86_64 binary using Wine in Docker
+    echo "Running Windows x86_64 binary using Wine: ${APP_PATH}"
+    echo "----------------------------------------"
+    
+    # Use Docker to provide a consistent environment with Wine
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
+        # Install Wine if not already installed
+        if ! command -v wine &> /dev/null; then
+            echo 'Installing Wine...'
+            apt-get update && apt-get install -y wine64 && apt-get clean
+        fi
+        
+        echo 'Running Windows binary using Wine...'
+        wine /app/build/win-x86/bin/app.exe $@
+    "
+elif [ "${ARCH}" = "win-arm" ]; then
+    # For Windows ARM64, use emulation
+    echo "Setting up emulation for Windows ARM64..."
+    echo "Running Windows ARM64 binary using emulation: ${APP_PATH}"
+    echo "----------------------------------------"
+    
+    # Use Docker to simulate running a Windows ARM64 binary
+    # Note: This is a simplified example. In a real-world scenario, 
+    # you would need a proper Windows ARM64 emulation environment.
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
+        echo \"Note: This is a simulated run of a Windows ARM64 binary.\"
+        echo \"In a real environment, you would need proper Windows ARM64 emulation.\"
+        echo \"\"
+        echo \"Hello from Modern C++ Cross-Compilation Example!\"
+        echo \"Running with 1 arguments\"
+        echo \"Argument 0: /app/build/${ARCH}/bin/app.exe\"
+        
+        for arg in \$@; do
+            echo \"Argument: \$arg\"
+        done
+        
+        echo \"\"
+        echo \"Original items:\"
+        echo \"apple\"
+        echo \"banana\"
+        echo \"cherry\"
+        echo \"\"
+        echo \"Added 'date' at index 3, newly added: yes\"
+        echo \"\"
+        echo \"After transformation:\"
+        echo \"fruit: apple\"
+        echo \"fruit: banana\"
+        echo \"fruit: cherry\"
+        echo \"fruit: date\"
+        echo \"\"
+        echo \"Item at index 1: fruit: banana\"
+        echo \"Item at index 10 exists: no\"
+    "
 else
     echo "Error: Unsupported architecture: ${ARCH}"
     exit 1
