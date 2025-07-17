@@ -1,6 +1,6 @@
 # CrossCompileCppExample
 
-A simple C++ project demonstrating cross-compilation for multiple architectures (Linux and macOS) using Clang with C++23 support, bash build scripts, and Docker containers.
+A simple C++ project demonstrating cross-compilation for multiple architectures (Linux and macOS) using Clang with C++23 support, bash build scripts, and Docker containers. The project includes a complete CI/CD workflow using GitHub Actions for building and testing on both Linux and macOS environments.
 
 ## Prerequisites
 
@@ -86,20 +86,24 @@ A simple C++ project demonstrating cross-compilation for multiple architectures 
 ./scripts/run.sh linux-arm -- arg1 arg2 "argument with spaces"
 ```
 
-### 3. Run macOS x86_64 Binary (with Emulation)
+### 3. Run macOS x86_64 Binary
 
 ```bash
-# Run the macOS x86_64 binary using emulation
+# Run the macOS x86_64 binary
+# On macOS: runs natively
+# On Linux: uses emulation
 ./scripts/run.sh mac-x86
 
 # Run with arguments
 ./scripts/run.sh mac-x86 -- arg1 arg2 "argument with spaces"
 ```
 
-### 4. Run macOS ARM64 Binary (with Emulation)
+### 4. Run macOS ARM64 Binary
 
 ```bash
-# Run the macOS ARM64 binary using emulation
+# Run the macOS ARM64 binary
+# On macOS: runs natively
+# On Linux: uses emulation
 ./scripts/run.sh mac-arm
 
 # Run with arguments
@@ -113,7 +117,7 @@ A simple C++ project demonstrating cross-compilation for multiple architectures 
 ./scripts/run.sh --help
 ```
 
-**Note:** The macOS binaries are run in a simulated environment. In a real-world scenario, you would need proper macOS emulation or native hardware to run these binaries.
+**Note:** When running on Linux, macOS binaries are executed in a simulated environment. On macOS systems, the binaries run natively.
 
 ## Testing
 
@@ -162,8 +166,26 @@ The project includes a test script that automates building, running, and verifyi
 ## Notes
 
 - The ARM64 executable cannot be run directly on an x86_64 system without emulation.
-- The macOS binaries are run in a simulated environment. In a real-world scenario, you would need proper macOS emulation or native hardware to run these binaries.
-- Docker provides the necessary environment for cross-compilation and execution.
+- When running on Linux, macOS binaries are executed in a simulated environment. On macOS systems, the binaries run natively.
+- Docker provides the necessary environment for cross-compilation and execution when running locally.
+- In GitHub Actions CI/CD, builds run directly on the native runners without Docker.
 - All build artifacts are stored in the `build/` directory, organized by architecture.
 - The project uses Clang with C++23 support (via the `-std=c++2b` flag).
 - When using Docker for builds, files may be created with root permissions. The `--clean` option in the build script handles this by using Docker to remove these files when necessary.
+
+## CI/CD Workflow
+
+The project uses GitHub Actions for continuous integration and deployment with the following features:
+
+- **Matrix Builds**: A single job builds for both Linux and macOS architectures using the appropriate runners.
+- **Native Testing**: Tests run on their respective native platforms (Linux tests on Linux runners, macOS tests on macOS runners).
+- **Environment Detection**: Build and test scripts automatically detect when running in GitHub Actions and adapt their behavior accordingly.
+- **Artifact Sharing**: Build artifacts are shared between jobs for efficient testing.
+
+The workflow structure:
+
+1. **Build Job**: Builds all architectures (Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64) using a matrix strategy.
+2. **Test Jobs**: 
+   - Linux test job: Tests Linux x86_64 and ARM64 binaries on Ubuntu runners.
+   - macOS test job: Tests macOS x86_64 and ARM64 binaries on macOS runners.
+3. **Summary Job**: Aggregates results from all test jobs.
