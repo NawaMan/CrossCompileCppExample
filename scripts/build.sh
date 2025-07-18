@@ -175,14 +175,61 @@ fi
 # Determine compiler flags based on architecture
 if [ "$ARCH" = "linux-x86" ]; then
   echo "Building for Linux x86_64 architecture"
-  COMPILER="clang++"
-  ARCH_FLAGS=""
-  SYSROOT_FLAGS=""
+  
+  # Run the build inside Docker using our dedicated script
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Run build directly on GitHub Actions runner
+    echo "Running build directly on GitHub Actions runner..."
+    COMPILER="clang++"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS=""
+  else
+    # Run the build inside Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID for Docker
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Run Docker with our build script
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm \
+      --user "${HOST_UID}:${HOST_GID}" \
+      -e ARCH="$ARCH" \
+      dev \
+      /app/docker/build-linux-x86.sh "${CLEAN_MODE}"
+    
+    # Exit early since the Docker container handled the build
+    exit $?
+  fi
 elif [ "$ARCH" = "linux-arm" ]; then
   echo "Building for Linux ARM64 architecture"
-  COMPILER="clang++"
-  ARCH_FLAGS="--target=aarch64-linux-gnu -march=armv8-a"
-  SYSROOT_FLAGS=""
+  
+  # Run the build inside Docker using our dedicated script
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Run build directly on GitHub Actions runner
+    echo "Running build directly on GitHub Actions runner..."
+    COMPILER="clang++"
+    ARCH_FLAGS="--target=aarch64-linux-gnu -march=armv8-a"
+    SYSROOT_FLAGS=""
+  else
+    # Run the build inside Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID for Docker
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Run Docker with our build script
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm \
+      --user "${HOST_UID}:${HOST_GID}" \
+      -e ARCH="$ARCH" \
+      -e SETUP_ARM64=true \
+      dev \
+      /app/docker/build-linux-arm.sh "${CLEAN_MODE}"
+    
+    # Exit early since the Docker container handled the build
+    exit $?
+  fi
 elif [ "$ARCH" = "mac-x86" ]; then
   echo "Building for macOS x86_64 architecture"
   # Create directories for macOS x86_64 build
@@ -313,17 +360,36 @@ HEXDUMP
   fi
 elif [ "$ARCH" = "win-x86" ]; then
   echo "Building for Windows x86_64 architecture"
+  
+  # Run the build inside Docker using our dedicated script
   if [ "$IN_GITHUB_ACTIONS" = true ]; then
-    # Use direct MinGW compiler on GitHub Actions
+    # Run build directly on GitHub Actions runner
+    echo "Running build directly on GitHub Actions runner..."
     COMPILER="x86_64-w64-mingw32-g++"
+    # Use static linking for Windows builds to avoid DLL dependencies
+    ARCH_FLAGS="-static"
+    # Add flags to statically link the standard libraries
+    SYSROOT_FLAGS="-static-libgcc -static-libstdc++"
+    EXTENSION=".exe"
   else
-    COMPILER="x86_64-w64-mingw32-clang++"
+    # Run the build inside Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID for Docker
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Run Docker with our build script
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm \
+      --user "${HOST_UID}:${HOST_GID}" \
+      -e ARCH="$ARCH" \
+      -e SETUP_WINDOWS=true \
+      dev \
+      /app/docker/build-win-x86.sh "${CLEAN_MODE}"
+    
+    # Exit early since the Docker container handled the build
+    exit $?
   fi
-  # Use static linking for Windows builds to avoid DLL dependencies
-  ARCH_FLAGS="-static"
-  # Add flags to statically link the standard libraries
-  SYSROOT_FLAGS="-static-libgcc -static-libstdc++"
-  EXTENSION=".exe"
 else
   echo "Error: Unknown architecture: $ARCH"
   exit 1

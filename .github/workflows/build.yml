@@ -19,9 +19,17 @@ jobs:
       
     - name: Install build dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
-        sudo apt-get install -y mingw-w64 g++-mingw-w64-x86-64 wine64
+        # Make setup script executable
+        chmod +x ./docker/setup-in-docker.sh
+        
+        # Set environment variables for setup
+        export SETUP_ARM64=true
+        export SETUP_WINDOWS=true
+        
+        # Run our setup script (without Docker)
+        sudo ./docker/setup-in-docker.sh
+        
+        # Verify installations
         clang --version
         x86_64-w64-mingw32-g++ --version || echo "x86_64-w64-mingw32-g++ not available"
     
@@ -43,9 +51,19 @@ jobs:
         # Create directories for osxcross
         sudo mkdir -p /opt/osxcross/bin
         
-        # We'll use our placeholder scripts since we don't have a real macOS SDK
-        # In a real setup, you would download and install osxcross here
-        echo "Using placeholder scripts for macOS cross-compilation"
+        # Copy our placeholder compiler scripts to the osxcross bin directory
+        sudo cp ./docker/x86_64-apple-darwin-clang++ /opt/osxcross/bin/
+        sudo cp ./docker/arm64-apple-darwin-clang++ /opt/osxcross/bin/
+        sudo chmod +x /opt/osxcross/bin/*-clang++
+        
+        # Add osxcross bin to PATH
+        echo "/opt/osxcross/bin" >> $GITHUB_PATH
+        
+        # Set up macOS environment using our setup script
+        export SETUP_MACOS=true
+        sudo ./docker/setup-in-docker.sh
+        
+        echo "macOS cross-compilation environment set up with placeholder scripts"
         
     # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
