@@ -174,15 +174,9 @@ jobs:
       
     - name: Test Windows x86_64
       run: |
-        # Verify binary exists without trying to run it with Wine
-        if [ -f "build/win-x86/bin/app.exe" ]; then
-          echo "Windows x86_64 binary exists - build successful"
-          echo "Skipping Wine execution in CI environment"
-          exit 0
-        else
-          echo "Windows x86_64 binary does not exist - build failed"
-          exit 1
-        fi
+        # Use the test script which will verify the binary exists
+        # The script is designed to handle Windows binaries in CI without Wine
+        ./scripts/test.sh win-x86
 
   test-windows-arm:
     name: Test Windows ARM64
@@ -201,15 +195,9 @@ jobs:
       
     - name: Test Windows ARM64
       run: |
-        # Check if we have a placeholder build
-        if grep -q "PLACEHOLDER_BINARY" build/win-arm/bin/app.exe 2>/dev/null; then
-          echo "Detected placeholder Windows ARM64 binary - skipping actual test"
-          echo "Windows ARM64 test passed (placeholder)"
-          exit 0
-        else
-          # Run the actual test if we have a real binary
-          ./scripts/test.sh win-arm
-        fi
+        # Use the test script which will verify the binary exists
+        # The script handles placeholder binaries appropriately
+        ./scripts/test.sh win-arm
 
   # Test macOS binaries on macOS runner
   test-macos:
