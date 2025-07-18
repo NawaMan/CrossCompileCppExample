@@ -29,7 +29,7 @@ jobs:
     - name: Build Linux x86_64
       run: ./scripts/build.sh linux-x86
       
-    - name: Build Linux ARM64
+    - name: Build Linux ARM_64
       run: ./scripts/build.sh linux-arm
       
     # Build Windows platforms
@@ -51,7 +51,7 @@ jobs:
     - name: Build macOS x86_64
       run: ./scripts/build.sh mac-x86
       
-    - name: Build macOS ARM64
+    - name: Build macOS ARM_64
       run: ./scripts/build.sh mac-arm
       
     # Upload artifacts
@@ -62,7 +62,7 @@ jobs:
         path: build/linux-x86/bin/
         retention-days: 1
         
-    - name: Upload Linux ARM64 artifacts
+    - name: Upload Linux ARM_64 artifacts
       uses: actions/upload-artifact@v4
       with:
         name: linux-arm-binaries
@@ -76,7 +76,7 @@ jobs:
         path: build/mac-x86/bin/
         retention-days: 1
         
-    - name: Upload macOS ARM64 artifacts
+    - name: Upload macOS ARM_64 artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mac-arm-binaries
@@ -112,7 +112,7 @@ jobs:
       run: ./scripts/test.sh linux-x86
 
   test-linux-arm:
-    name: Test Linux ARM64
+    name: Test Linux ARM_64
     needs: build
     runs-on: ubuntu-latest
     
@@ -120,7 +120,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Download Linux ARM64 artifacts
+    - name: Download Linux ARM_64 artifacts
       uses: actions/download-artifact@v4
       with:
         name: linux-arm-binaries
@@ -131,7 +131,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y qemu-user-static
         
-    - name: Test Linux ARM64
+    - name: Test Linux ARM_64
       run: ./scripts/test.sh linux-arm
 
   test-windows-x86:
@@ -158,7 +158,7 @@ jobs:
 
   # Test macOS x86_64 binaries on macOS runner
   test-macos-x86:
-    name: Test macOS x86_64 Build
+    name: Test MacOS x86_64
     needs: build
     runs-on: macos-latest
     
@@ -177,13 +177,13 @@ jobs:
         chmod +x build/mac-x86/bin/app
         ls -la build/mac-x86/bin/
         file build/mac-x86/bin/app
-        
-    - name: Test macOS x86_64 build
+
+    - name: Test MacOS x86_64
       run: ./scripts/test.sh mac-x86
 
-  # Test macOS ARM64 binaries on macOS runner
+  # Test macOS ARM_64 binaries on macOS runner
   test-macos-arm:
-    name: Test macOS ARM64 Build
+    name: Test MacOS ARM_64
     needs: build
     runs-on: macos-latest
     
@@ -191,7 +191,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Download macOS ARM64 artifacts
+    - name: Download macOS ARM_64 artifacts
       uses: actions/download-artifact@v4
       with:
         name: mac-arm-binaries
@@ -203,7 +203,7 @@ jobs:
         ls -la build/mac-arm/bin/
         file build/mac-arm/bin/app
         
-    - name: Test macOS ARM64 build
+    - name: Test MacOS ARM_64
       run: ./scripts/test.sh mac-arm
 
   # Final summary job
@@ -219,9 +219,9 @@ jobs:
         echo "Cross-Platform Build and Test Summary"
         echo "-------------------------------------"
         echo "Linux x86_64: ${{ needs.test-linux-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "Linux ARM64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "Linux ARM_64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "macOS x86_64: ${{ needs.test-macos-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "macOS ARM64: ${{ needs.test-macos-arm.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "macOS ARM_64: ${{ needs.test-macos-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "Windows x86_64: ${{ needs.test-windows-x86.result == 'success' && 'PASS' || 'FAIL' }}"
         # Windows ARM support removed
         
