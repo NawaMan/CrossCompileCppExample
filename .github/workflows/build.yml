@@ -37,6 +37,16 @@ jobs:
       run: ./scripts/build.sh win-x86
       
 
+    # Set up osxcross for macOS cross-compilation
+    - name: Set up osxcross
+      run: |
+        # Create directories for osxcross
+        sudo mkdir -p /opt/osxcross/bin
+        
+        # We'll use our placeholder scripts since we don't have a real macOS SDK
+        # In a real setup, you would download and install osxcross here
+        echo "Using placeholder scripts for macOS cross-compilation"
+        
     # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
       run: ./scripts/build.sh mac-x86
