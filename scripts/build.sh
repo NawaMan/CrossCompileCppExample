@@ -319,8 +319,10 @@ elif [ "$ARCH" = "win-x86" ]; then
   else
     COMPILER="x86_64-w64-mingw32-clang++"
   fi
-  ARCH_FLAGS=""
-  SYSROOT_FLAGS=""
+  # Use static linking for Windows builds to avoid DLL dependencies
+  ARCH_FLAGS="-static"
+  # Add flags to statically link the standard libraries
+  SYSROOT_FLAGS="-static-libgcc -static-libstdc++"
   EXTENSION=".exe"
 else
   echo "Error: Unknown architecture: $ARCH"
@@ -375,8 +377,9 @@ echo \"Linking ${BIN_DIR}/app\"
 
 # Special handling for Windows cross-compilation
 if [ \"${ARCH}\" = \"win-x86\" ]; then
-    echo \"Using ${COMPILER} for Windows x86_64 compilation\"
-    ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+    echo \"Using ${COMPILER} for Windows x86_64 compilation with static linking\"
+    # Use static linking for Windows to avoid DLL dependencies
+    ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS} -Wl,-Bstatic
 else
     # Debug output
     echo \"Debug: BIN_DIR=${BIN_DIR}\"
