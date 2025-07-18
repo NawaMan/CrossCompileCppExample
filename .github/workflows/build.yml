@@ -10,19 +10,14 @@ on:
 jobs:
   # Combined build job for all platforms using matrix strategy
   build:
-    name: Build ${{ matrix.os }} Platforms
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-      fail-fast: false
+    name: Build All Platforms
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install Linux build dependencies
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
@@ -30,45 +25,30 @@ jobs:
         clang --version
         x86_64-w64-mingw32-g++ --version || echo "x86_64-w64-mingw32-g++ not available"
     
-    - name: Install macOS build dependencies
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install llvm
-        clang --version
-    
-    # Build Linux platforms
+    # Build all platforms from Linux
     - name: Build Linux x86_64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh linux-x86
       
     - name: Build Linux ARM64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh linux-arm
       
     # Build Windows platforms
     - name: Build Windows x86_64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh win-x86
       
-    # This is a cross-compiled Windows binary from Linux, which might have issues
-      
     # Windows ARM64 build will use placeholder approach
-    # No special setup needed as we'll use the placeholder binary approach
-        
-    # Windows ARM64 build removed
+    - name: Build Windows ARM64
+      run: ./scripts/build.sh win-arm
       
-    # Build macOS platforms
+    # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
-      if: matrix.os == 'macos-latest'
       run: ./scripts/build.sh mac-x86
       
     - name: Build macOS ARM64
-      if: matrix.os == 'macos-latest'
       run: ./scripts/build.sh mac-arm
       
     # Upload artifacts
     - name: Upload Linux x86_64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: linux-x86-binaries
@@ -76,7 +56,6 @@ jobs:
         retention-days: 1
         
     - name: Upload Linux ARM64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: linux-arm-binaries
@@ -84,7 +63,6 @@ jobs:
         retention-days: 1
         
     - name: Upload macOS x86_64 artifacts
-      if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: mac-x86-binaries
@@ -92,7 +70,6 @@ jobs:
         retention-days: 1
         
     - name: Upload macOS ARM64 artifacts
-      if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: mac-arm-binaries
@@ -100,14 +77,18 @@ jobs:
         retention-days: 1
         
     - name: Upload Windows x86_64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: win-x86-binaries
         path: build/win-x86/bin/
         retention-days: 1
         
-    # Windows ARM64 artifacts upload removed
+    - name: Upload Windows ARM64 artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: win-arm-binaries
+        path: build/win-arm/bin/
+        retention-days: 1
 
   # Test jobs for each platform
   test-linux-x86:
