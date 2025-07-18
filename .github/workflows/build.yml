@@ -131,11 +131,6 @@ jobs:
         name: linux-x86-binaries
         path: build/linux-x86/bin/
       
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential
-      
     - name: Test Linux x86_64
       run: ./scripts/test.sh linux-x86
 
@@ -154,13 +149,15 @@ jobs:
         name: linux-arm-binaries
         path: build/linux-arm/bin/
       
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
-      
     - name: Test Linux ARM64
-      run: ./scripts/test.sh linux-arm
+      run: |
+        # Only install QEMU for ARM emulation if needed
+        if ! command -v qemu-aarch64-static &> /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+        fi
+        
+        ./scripts/test.sh linux-arm
 
   test-windows-x86:
     name: Test Windows x86_64
@@ -176,11 +173,6 @@ jobs:
       with:
         name: win-x86-binaries
         path: build/win-x86/bin/
-      
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential mingw-w64
       
     - name: Test Windows x86_64
       run: |
@@ -208,11 +200,6 @@ jobs:
       with:
         name: win-arm-binaries
         path: build/win-arm/bin/
-      
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential mingw-w64
       
     - name: Test Windows ARM64
       run: |
@@ -247,11 +234,6 @@ jobs:
       with:
         name: mac-arm-binaries
         path: build/mac-arm/bin/
-        
-    - name: Install test dependencies
-      run: |
-        brew install llvm
-        clang --version
         
     - name: Test macOS builds
       run: ./scripts/test.sh mac-x86 mac-arm
