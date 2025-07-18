@@ -156,9 +156,9 @@ jobs:
         ./scripts/test.ps1 win-x86
         exit $LASTEXITCODE  # Use the exit code from the test script
 
-  # Test macOS binaries on macOS runner
-  test-macos:
-    name: Test macOS Builds
+  # Test macOS x86_64 binaries on macOS runner
+  test-macos-x86:
+    name: Test macOS x86_64 Build
     needs: build
     runs-on: macos-latest
     
@@ -172,19 +172,44 @@ jobs:
         name: mac-x86-binaries
         path: build/mac-x86/bin/
         
+    - name: Make binary executable
+      run: |
+        chmod +x build/mac-x86/bin/app
+        ls -la build/mac-x86/bin/
+        file build/mac-x86/bin/app
+        
+    - name: Test macOS x86_64 build
+      run: ./scripts/test.sh mac-x86
+
+  # Test macOS ARM64 binaries on macOS runner
+  test-macos-arm:
+    name: Test macOS ARM64 Build
+    needs: build
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
     - name: Download macOS ARM64 artifacts
       uses: actions/download-artifact@v4
       with:
         name: mac-arm-binaries
         path: build/mac-arm/bin/
         
-    - name: Test macOS builds
-      run: ./scripts/test.sh mac-x86 mac-arm
+    - name: Make binary executable
+      run: |
+        chmod +x build/mac-arm/bin/app
+        ls -la build/mac-arm/bin/
+        file build/mac-arm/bin/app
+        
+    - name: Test macOS ARM64 build
+      run: ./scripts/test.sh mac-arm
 
   # Final summary job
   summary:
     name: Build and Test Summary
-    needs: [test-linux-x86, test-linux-arm, test-macos, test-windows-x86]
+    needs: [test-linux-x86, test-linux-arm, test-macos-x86, test-macos-arm, test-windows-x86]
     runs-on: ubuntu-latest
     if: always()
     
@@ -195,11 +220,12 @@ jobs:
         echo "-------------------------------------"
         echo "Linux x86_64: ${{ needs.test-linux-x86.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "Linux ARM64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "macOS: ${{ needs.test-macos.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "macOS x86_64: ${{ needs.test-macos-x86.result == 'success' && 'PASS' || 'FAIL' }}"
+        echo "macOS ARM64: ${{ needs.test-macos-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "Windows x86_64: ${{ needs.test-windows-x86.result == 'success' && 'PASS' || 'FAIL' }}"
         # Windows ARM support removed
         
-        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" ]]; then
+        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos-x86.result }}" != "success" || "${{ needs.test-macos-arm.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" ]]; then
           echo "Some builds or tests failed!"
           exit 1
         else

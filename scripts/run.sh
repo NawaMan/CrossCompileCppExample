@@ -214,7 +214,8 @@ elif [ "${ARCH}" = "mac-x86" ] || [ "${ARCH}" = "mac-arm" ]; then
         fi
 
         # Check if this is a placeholder binary (created by cross-compilation)
-        if grep -q "MACHO64\|MACHO-ARM64" "${APP_PATH}" 2>/dev/null; then
+        # First check for our comment marker
+        if grep -q "This is a placeholder for a macOS" "${APP_PATH}" 2>/dev/null; then
             echo "Detected placeholder macOS binary created by cross-compilation"
             echo "Simulating execution instead of attempting to run the placeholder..."
             
