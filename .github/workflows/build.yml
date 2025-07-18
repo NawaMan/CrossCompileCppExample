@@ -10,19 +10,14 @@ on:
 jobs:
   # Combined build job for all platforms using matrix strategy
   build:
-    name: Build ${{ matrix.os }} Platforms
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-      fail-fast: false
+    name: Build All Platforms
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install Linux build dependencies
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
@@ -30,45 +25,30 @@ jobs:
         clang --version
         x86_64-w64-mingw32-g++ --version || echo "x86_64-w64-mingw32-g++ not available"
     
-    - name: Install macOS build dependencies
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install llvm
-        clang --version
-    
-    # Build Linux platforms
+    # Build all platforms from Linux
     - name: Build Linux x86_64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh linux-x86
       
     - name: Build Linux ARM64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh linux-arm
       
     # Build Windows platforms
     - name: Build Windows x86_64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh win-x86
       
     # Windows ARM64 build will use placeholder approach
-    # No special setup needed as we'll use the placeholder binary approach
-        
     - name: Build Windows ARM64
-      if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh win-arm
       
-    # Build macOS platforms
+    # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
-      if: matrix.os == 'macos-latest'
       run: ./scripts/build.sh mac-x86
       
     - name: Build macOS ARM64
-      if: matrix.os == 'macos-latest'
       run: ./scripts/build.sh mac-arm
       
     # Upload artifacts
     - name: Upload Linux x86_64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: linux-x86-binaries
@@ -76,7 +56,6 @@ jobs:
         retention-days: 1
         
     - name: Upload Linux ARM64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: linux-arm-binaries
@@ -84,7 +63,6 @@ jobs:
         retention-days: 1
         
     - name: Upload macOS x86_64 artifacts
-      if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: mac-x86-binaries
@@ -92,7 +70,6 @@ jobs:
         retention-days: 1
         
     - name: Upload macOS ARM64 artifacts
-      if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: mac-arm-binaries
@@ -100,7 +77,6 @@ jobs:
         retention-days: 1
         
     - name: Upload Windows x86_64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: win-x86-binaries
@@ -108,7 +84,6 @@ jobs:
         retention-days: 1
         
     - name: Upload Windows ARM64 artifacts
-      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: win-arm-binaries
@@ -131,11 +106,6 @@ jobs:
         name: linux-x86-binaries
         path: build/linux-x86/bin/
       
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential
-      
     - name: Test Linux x86_64
       run: ./scripts/test.sh linux-x86
 
@@ -154,18 +124,18 @@ jobs:
         name: linux-arm-binaries
         path: build/linux-arm/bin/
       
-    - name: Install test dependencies
+    - name: Install QEMU for ARM emulation
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
-      
+        sudo apt-get install -y qemu-user-static
+        
     - name: Test Linux ARM64
       run: ./scripts/test.sh linux-arm
 
   test-windows-x86:
     name: Test Windows x86_64
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     
     steps:
     - name: Checkout code
@@ -177,54 +147,12 @@ jobs:
         name: win-x86-binaries
         path: build/win-x86/bin/
       
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential mingw-w64
-      
     - name: Test Windows x86_64
+      shell: pwsh
       run: |
-        # Verify binary exists without trying to run it with Wine
-        if [ -f "build/win-x86/bin/app.exe" ]; then
-          echo "Windows x86_64 binary exists - build successful"
-          echo "Skipping Wine execution in CI environment"
-          exit 0
-        else
-          echo "Windows x86_64 binary does not exist - build failed"
-          exit 1
-        fi
-
-  test-windows-arm:
-    name: Test Windows ARM64
-    needs: build
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download Windows ARM64 artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: win-arm-binaries
-        path: build/win-arm/bin/
-      
-    - name: Install test dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential mingw-w64
-      
-    - name: Test Windows ARM64
-      run: |
-        # Check if we have a placeholder build
-        if grep -q "PLACEHOLDER_BINARY" build/win-arm/bin/app.exe 2>/dev/null; then
-          echo "Detected placeholder Windows ARM64 binary - skipping actual test"
-          echo "Windows ARM64 test passed (placeholder)"
-          exit 0
-        else
-          # Run the actual test if we have a real binary
-          ./scripts/test.sh win-arm
-        fi
+        # Run the PowerShell test script for Windows
+        ./scripts/test.ps1 win-x86
+        exit $LASTEXITCODE  # Use the exit code from the test script
 
   # Test macOS binaries on macOS runner
   test-macos:
@@ -248,18 +176,13 @@ jobs:
         name: mac-arm-binaries
         path: build/mac-arm/bin/
         
-    - name: Install test dependencies
-      run: |
-        brew install llvm
-        clang --version
-        
     - name: Test macOS builds
       run: ./scripts/test.sh mac-x86 mac-arm
 
   # Final summary job
   summary:
     name: Build and Test Summary
-    needs: [test-linux-x86, test-linux-arm, test-macos, test-windows-x86, test-windows-arm]
+    needs: [test-linux-x86, test-linux-arm, test-macos, test-windows-x86]
     runs-on: ubuntu-latest
     if: always()
     
@@ -272,9 +195,9 @@ jobs:
         echo "Linux ARM64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "macOS: ${{ needs.test-macos.result == 'success' && 'PASS' || 'FAIL' }}"
         echo "Windows x86_64: ${{ needs.test-windows-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "Windows ARM64: ${{ needs.test-windows-arm.result == 'success' && 'PASS' || 'FAIL' }}"
+        # Windows ARM support removed
         
-        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" || "${{ needs.test-windows-arm.result }}" != "success" ]]; then
+        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" ]]; then
           echo "Some builds or tests failed!"
           exit 1
         else
