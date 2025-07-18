@@ -24,7 +24,7 @@ $Archs = @()
 
 foreach ($arg in $args) {
     switch -Regex ($arg) {
-        "^(linux-x86|linux-arm|mac-x86|mac-arm|win-x86|win-arm)$" {
+        "^(linux-x86|linux-arm|mac-x86|mac-arm|win-x86)$" {
             $Archs += $arg
         }
         "^(-h|--help)$" {
@@ -37,7 +37,7 @@ foreach ($arg in $args) {
             Write-Host "  mac-x86      Test macOS x86_64 build"
             Write-Host "  mac-arm      Test macOS ARM64 build"
             Write-Host "  win-x86      Test Windows x86_64 build"
-            Write-Host "  win-arm      Test Windows ARM64 build"
+            # Windows ARM support removed
             Write-Host "  (none)       Test all architectures"
             exit 0
         }
@@ -229,26 +229,6 @@ if ($Archs.Count -gt 0) {
                     $WinX86Result = "FAIL"
                 }
             }
-            "win-arm" {
-                Print-Header "Testing win-arm (verification only)"
-                $BinaryPath = Join-Path $ProjectRoot "build\win-arm\bin\app.exe"
-                if (Test-Path $BinaryPath) {
-                    # Check if it's a placeholder
-                    $Content = Get-Content $BinaryPath -Raw -ErrorAction SilentlyContinue
-                    if ($Content -match "PLACEHOLDER_BINARY") {
-                        Write-Host "✓ Windows ARM64 placeholder binary exists" -ForegroundColor $Blue
-                    }
-                    else {
-                        Write-Host "✓ Windows ARM64 binary exists" -ForegroundColor $Green
-                    }
-                    $WinArmResult = "SKIP"
-                }
-                else {
-                    Write-Host "✗ Windows ARM64 binary not found" -ForegroundColor $Red
-                    $WinArmResult = "FAIL"
-                }
-                Write-Host "Note: Windows ARM64 binaries cannot be fully tested on x64 Windows" -ForegroundColor $Yellow
-            }
         }
     }
 }
@@ -320,26 +300,6 @@ else {
         Write-Host "✗ Windows x86_64 binary not found" -ForegroundColor $Red
         $WinX86Result = "FAIL"
     }
-    
-    # Windows ARM64
-    Print-Header "Testing win-arm (verification only)"
-    $BinaryPath = Join-Path $ProjectRoot "build\win-arm\bin\app.exe"
-    if (Test-Path $BinaryPath) {
-        # Check if it's a placeholder
-        $Content = Get-Content $BinaryPath -Raw -ErrorAction SilentlyContinue
-        if ($Content -match "PLACEHOLDER_BINARY") {
-            Write-Host "✓ Windows ARM64 placeholder binary exists" -ForegroundColor $Blue
-        }
-        else {
-            Write-Host "✓ Windows ARM64 binary exists" -ForegroundColor $Green
-        }
-        $WinArmResult = "SKIP"
-    }
-    else {
-        Write-Host "✗ Windows ARM64 binary not found" -ForegroundColor $Red
-        $WinArmResult = "FAIL"
-    }
-    Write-Host "Note: Windows ARM64 binaries cannot be fully tested on x64 Windows" -ForegroundColor $Yellow
 }
 
 # Print summary
@@ -394,20 +354,10 @@ else {
     Write-Host "win-x86: $WinX86Result" -ForegroundColor $Red
 }
 
-if ($WinArmResult -eq "PASS") {
-    Write-Host "win-arm: $WinArmResult" -ForegroundColor $Green
-}
-elseif ($WinArmResult -eq "SKIP") {
-    Write-Host "win-arm: $WinArmResult" -ForegroundColor $Blue
-}
-else {
-    Write-Host "win-arm: $WinArmResult" -ForegroundColor $Red
-}
-
 # Exit with error if any test failed
-if ($LinuxX86Result -eq "FAIL" -or $LinuxArmResult -eq "FAIL" -or 
-    $MacX86Result -eq "FAIL" -or $MacArmResult -eq "FAIL" -or 
-    $WinX86Result -eq "FAIL" -or $WinArmResult -eq "FAIL") {
+if ($LinuxX86Result -eq "FAIL" -or $LinuxArmResult -eq "FAIL" -or
+    $MacX86Result -eq "FAIL" -or $MacArmResult -eq "FAIL" -or
+    $WinX86Result -eq "FAIL") {
     exit 1
 }
 

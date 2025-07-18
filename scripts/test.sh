@@ -35,7 +35,7 @@ ARCHS=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    linux-x86|linux-arm|mac-x86|mac-arm|win-x86|win-arm)
+    linux-x86|linux-arm|mac-x86|mac-arm|win-x86)
       ARCHS+=("$1")
       shift
       ;;
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
       echo "  mac-x86      Test macOS x86_64 build"
       echo "  mac-arm      Test macOS ARM64 build"
       echo "  win-x86      Test Windows x86_64 build"
-      echo "  win-arm      Test Windows ARM64 build"
+      # Windows ARM support removed
       echo "  (none)       Test all architectures"
       exit 0
       ;;
@@ -160,23 +160,6 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
         echo -e "${YELLOW}Note: Wine is not installed. Windows x86_64 binaries cannot be tested${NC}"
         WIN_X86_RESULT="SKIP"
       fi
-    elif [[ "$ARCH" == "win-arm" ]]; then
-      print_header "Testing $ARCH (verification only)"
-      # Check if the binary exists
-      if [ -f "${PROJECT_ROOT}/build/win-arm/bin/app.exe" ]; then
-        # Check if it's a placeholder
-        if grep -q "PLACEHOLDER_BINARY" "${PROJECT_ROOT}/build/win-arm/bin/app.exe" 2>/dev/null; then
-          echo -e "${BLUE}✓ Windows ARM64 placeholder binary exists${NC}"
-          WIN_ARM_RESULT="SKIP"
-        else
-          echo -e "${GREEN}✓ Windows ARM64 binary exists${NC}"
-          WIN_ARM_RESULT="PASS"
-        fi
-      else
-        echo -e "${RED}✗ Windows ARM64 binary not found${NC}"
-        WIN_ARM_RESULT="FAIL"
-      fi
-      echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
     else
       run_test $ARCH
       
@@ -192,8 +175,7 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
           MAC_ARM_RESULT="PASS"
         elif [ "$ARCH" == "win-x86" ]; then
           WIN_X86_RESULT="PASS"
-        elif [ "$ARCH" == "win-arm" ]; then
-          WIN_ARM_RESULT="PASS"
+        # Windows ARM support removed
         fi
       else
         if [ "$ARCH" == "linux-x86" ]; then
@@ -206,8 +188,7 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
           MAC_ARM_RESULT="FAIL"
         elif [ "$ARCH" == "win-x86" ]; then
           WIN_X86_RESULT="FAIL"
-        elif [ "$ARCH" == "win-arm" ]; then
-          WIN_ARM_RESULT="FAIL"
+        # Windows ARM support removed
         fi
       fi
     fi
@@ -293,21 +274,7 @@ else
     WIN_X86_RESULT="SKIP"
   fi
   
-  # Test win-arm (verification only)
-  print_header "Testing win-arm (verification only)"
-  # Check if the binary exists
-  if [ -f "${PROJECT_ROOT}/build/win-arm/bin/app.exe" ]; then
-    # Check if it's a placeholder
-    if grep -q "PLACEHOLDER_BINARY" "${PROJECT_ROOT}/build/win-arm/bin/app.exe" 2>/dev/null; then
-      echo -e "${BLUE}✓ Windows ARM64 placeholder binary exists${NC}"
-    else
-      echo -e "${GREEN}✓ Windows ARM64 binary exists${NC}"
-    fi
-  else
-    echo -e "${RED}✗ Windows ARM64 binary not found${NC}"
-  fi
-  echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
-  WIN_ARM_RESULT="SKIP"
+  # Windows ARM support removed
   
   # Print summary
   print_header "Test Summary"
@@ -347,18 +314,12 @@ else
     echo -e "win-x86: ${RED}${WIN_X86_RESULT}${NC}"
   fi
   
-  if [ "$WIN_ARM_RESULT" = "SKIP" ]; then
-    echo -e "win-arm: ${BLUE}${WIN_ARM_RESULT}${NC}"
-  elif [ "$WIN_ARM_RESULT" = "PASS" ]; then
-    echo -e "win-arm: ${GREEN}${WIN_ARM_RESULT}${NC}"
-  else
-    echo -e "win-arm: ${RED}${WIN_ARM_RESULT}${NC}"
-  fi
+  # Windows ARM support removed
   
   # Exit with error if any test failed
   if [ "$LINUX_X86_RESULT" = "FAIL" ] || [ "$LINUX_ARM_RESULT" = "FAIL" ] || \
      ([ "$HOST_OS" == "macos" ] && ([ "$MAC_X86_RESULT" = "FAIL" ] || [ "$MAC_ARM_RESULT" = "FAIL" ])) || \
-     [ "$WIN_X86_RESULT" = "FAIL" ] || [ "$WIN_ARM_RESULT" = "FAIL" ]; then
+     [ "$WIN_X86_RESULT" = "FAIL" ]; then
     exit 1
   fi
 fi
