@@ -255,6 +255,25 @@ else
   
   # Test mac-x86
   if [ "$HOST_OS" == "macos" ]; then
+    # Run the build inside the Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Create a temporary build script
+    BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
+    
+    # Create the build script with proper commands
+    echo "$BUILD_SCRIPT_CONTENT" > "${BUILD_SCRIPT}"
+    
+    # Make the script executable
+    chmod +x "${BUILD_SCRIPT}"
+    
+    # Run the build script inside the Docker container with user mapping
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm --user "${HOST_UID}:${HOST_GID}" -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+    
     if run_test "mac-x86"; then
       MAC_X86_RESULT="PASS"
     else
@@ -274,6 +293,25 @@ else
   
   # Test mac-arm
   if [ "$HOST_OS" == "macos" ]; then
+    # Run the build inside the Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Create a temporary build script
+    BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
+    
+    # Create the build script with proper commands
+    echo "$BUILD_SCRIPT_CONTENT" > "${BUILD_SCRIPT}"
+    
+    # Make the script executable
+    chmod +x "${BUILD_SCRIPT}"
+    
+    # Run the build script inside the Docker container with user mapping
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm --user "${HOST_UID}:${HOST_GID}" -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+    
     if run_test "mac-arm"; then
       MAC_ARM_RESULT="PASS"
     else
@@ -320,6 +358,7 @@ else
     echo -e "linux-x86: ${RED}${LINUX_X86_RESULT}${NC}"
   fi
   
+  
   if [ "$LINUX_ARM_RESULT" = "PASS" ]; then
     echo -e "linux-arm: ${GREEN}${LINUX_ARM_RESULT}${NC}"
   else
@@ -347,7 +386,7 @@ else
   elif [ "$WIN_X86_RESULT" = "PASS" ]; then
     echo -e "win-x86: ${GREEN}${WIN_X86_RESULT}${NC}"
   else
-    echo -e "win-x86: ${RED}${WIN_X86_RESULT}${NC}"
+    echo -e "  win-x86: ${RED}${WIN_X86_RESULT}${NC}"
   fi
   
   # Windows ARM support removed

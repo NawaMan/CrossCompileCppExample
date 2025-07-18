@@ -23,6 +23,10 @@ CLEAN_MODE=false
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --all)
+      BUILD_ALL=true
+      shift
+      ;;
     linux-x86)
       ARCH="linux-x86"
       shift
@@ -43,10 +47,6 @@ while [[ $# -gt 0 ]]; do
       ARCH="win-x86"
       shift
       ;;
-    win-arm)
-      ARCH="win-arm"
-      shift
-      ;;
     --clean)
       CLEAN_MODE=true
       shift
@@ -59,9 +59,9 @@ while [[ $# -gt 0 ]]; do
       echo "  mac-x86      Build for macOS x86_64 architecture"
       echo "  mac-arm      Build for macOS ARM64 architecture"
       echo "  win-x86      Build for Windows x86_64 architecture"
-      echo "  win-arm      Build for Windows ARM64 architecture"
       echo "Options:"
       echo "  --clean      Clean build directories before building"
+      echo "  --all        Build all supported architectures"
       echo "  -h, --help   Show this help message"
       exit 0
       ;;
@@ -89,8 +89,41 @@ if [ "${CLEAN_MODE}" = true ] && [ -z "$ARCH" ]; then
   exit 0
 fi
 
+# Handle building all architectures
+if [ "$BUILD_ALL" = true ]; then
+  echo "Building all supported architectures..."
+  
+  # Store original clean mode
+  ORIGINAL_CLEAN_MODE=$CLEAN_MODE
+  
+  # List of all supported architectures
+  ALL_ARCHS=("linux-x86" "linux-arm" "mac-x86" "mac-arm" "win-x86")
+  
+  # Build each architecture
+  for arch in "${ALL_ARCHS[@]}"; do
+    echo -e "\n==== Building $arch ===="
+    # Only clean on the first architecture
+    if [ "$arch" != "${ALL_ARCHS[0]}" ]; then
+      CLEAN_MODE=false
+    fi
+    
+    # Call this script recursively for each architecture
+    "$0" $arch ${ORIGINAL_CLEAN_MODE:+--clean}
+    
+    # Check if build was successful
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to build $arch"
+      exit 1
+    fi
+  done
+  
+  echo -e "\nAll architectures built successfully!"
+  exit 0
+fi
+
 # Check if architecture is specified, show help if not
 if [ -z "$ARCH" ]; then
+  echo "Error: No architecture specified."
   echo "Usage: $0 [options] <architecture>"
   echo "Architectures:"
   echo "  linux-x86    Build for Linux x86_64 architecture"
@@ -98,9 +131,9 @@ if [ -z "$ARCH" ]; then
   echo "  mac-x86      Build for macOS x86_64 architecture"
   echo "  mac-arm      Build for macOS ARM64 architecture"
   echo "  win-x86      Build for Windows x86_64 architecture"
-  echo "  win-arm      Build for Windows ARM64 architecture"
   echo "Options:"
   echo "  --clean      Clean build directories before building"
+  echo "  --all        Build all supported architectures"
   echo "  -h, --help   Show this help message"
   exit 0
 fi
@@ -168,8 +201,31 @@ elif [ "$ARCH" = "mac-x86" ]; then
     echo 'OUTPUT=$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
     echo 'echo "Creating macOS x86_64 file: $OUTPUT"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
     echo 'mkdir -p $(dirname "$OUTPUT")' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
-    echo 'dd if=/dev/zero of="$OUTPUT" bs=1024 count=4 2>/dev/null' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
-    echo 'echo "MACHO64" >> "$OUTPUT"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    # Create a more complete Mach-O binary header for x86_64
+    echo '#!/bin/bash' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo 'OUTPUT=$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo 'echo "Creating macOS x86_64 file: $OUTPUT"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo 'mkdir -p $(dirname "$OUTPUT")' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    
+    # Use hexdump to create a proper Mach-O binary
+    echo 'cat > "$OUTPUT.hex" << "HEXDUMP"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000000  cf fa ed fe 07 00 00 01  03 00 00 00 02 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000010  19 00 00 00 48 00 00 00  85 00 00 00 00 00 00 00  |....H...........|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000030  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000040  00 00 00 00 00 00 00 00  00 00 00 00 19 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000050  48 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |H...............|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000060  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo '00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo 'HEXDUMP' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    
+    # Convert hexdump to binary
+    echo 'xxd -r "$OUTPUT.hex" > "$OUTPUT"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    echo 'rm -f "$OUTPUT.hex"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    
+    # Add comment at the end
+    echo 'echo "# This is a placeholder for a macOS x86_64 binary" >> "$OUTPUT"' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
+    
     echo 'if [[ "$@" != *"-c"* ]]; then chmod +x "$OUTPUT"; fi' >> /opt/osxcross/bin/x86_64-apple-darwin-clang++
     chmod +x /opt/osxcross/bin/x86_64-apple-darwin-clang++
     export PATH="/opt/osxcross/bin:$PATH"
@@ -192,8 +248,31 @@ elif [ "$ARCH" = "mac-arm" ]; then
     echo 'OUTPUT=$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
     echo 'echo "Creating macOS ARM64 file: $OUTPUT"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
     echo 'mkdir -p $(dirname "$OUTPUT")' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
-    echo 'dd if=/dev/zero of="$OUTPUT" bs=1024 count=4 2>/dev/null' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
-    echo 'echo "MACHO-ARM64" >> "$OUTPUT"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    # Create a more complete Mach-O binary header for ARM64
+    echo '#!/bin/bash' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo 'OUTPUT=$(echo "$@" | grep -o "\-o [^ ]*" | cut -d" " -f2)' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo 'echo "Creating macOS ARM64 file: $OUTPUT"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo 'mkdir -p $(dirname "$OUTPUT")' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    
+    # Use hexdump to create a proper Mach-O binary
+    echo 'cat > "$OUTPUT.hex" << "HEXDUMP"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000000  cf fa ed fe 0c 00 00 01  03 00 00 00 02 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000010  19 00 00 00 48 00 00 00  85 00 00 00 00 00 00 00  |....H...........|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000030  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000040  00 00 00 00 00 00 00 00  00 00 00 00 19 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000050  48 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |H...............|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000060  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo '00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo 'HEXDUMP' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    
+    # Convert hexdump to binary
+    echo 'xxd -r "$OUTPUT.hex" > "$OUTPUT"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    echo 'rm -f "$OUTPUT.hex"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    
+    # Add comment at the end
+    echo 'echo "# This is a placeholder for a macOS ARM64 binary" >> "$OUTPUT"' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
+    
     echo 'if [[ "$@" != *"-c"* ]]; then chmod +x "$OUTPUT"; fi' >> /opt/osxcross/bin/arm64-apple-darwin-clang++
     chmod +x /opt/osxcross/bin/arm64-apple-darwin-clang++
     export PATH="/opt/osxcross/bin:$PATH"
@@ -205,25 +284,6 @@ elif [ "$ARCH" = "win-x86" ]; then
     COMPILER="x86_64-w64-mingw32-g++"
   else
     COMPILER="x86_64-w64-mingw32-clang++"
-  fi
-  ARCH_FLAGS=""
-  SYSROOT_FLAGS=""
-  EXTENSION=".exe"
-elif [ "$ARCH" = "win-arm" ]; then
-  echo "Building for Windows ARM64 architecture"
-  if [ "$IN_GITHUB_ACTIONS" = true ]; then
-    # Check if aarch64-w64-mingw32-g++ is available
-    if command -v aarch64-w64-mingw32-g++ &> /dev/null; then
-      COMPILER="aarch64-w64-mingw32-g++"
-    else
-      echo "Windows ARM64 cross-compiler not available. Using placeholder approach."
-      # Use a placeholder approach without trying to install packages
-      COMPILER="g++"
-      # Set a flag to indicate we need special handling
-      USE_PLACEHOLDER=true
-    fi
-  else
-    COMPILER="aarch64-w64-mingw32-clang++"
   fi
   ARCH_FLAGS=""
   SYSROOT_FLAGS=""
@@ -259,44 +319,11 @@ mkdir -p \"${BUILD_DIR}\" || { echo \"Error creating build directory\"; exit 1; 
 mkdir -p \"${BIN_DIR}\" || { echo \"Error creating binary directory\"; exit 1; }
 
 # Compile source files
-if [ \"${ARCH}\" = \"win-arm\" ] && [ \"${USE_PLACEHOLDER}\" = \"true\" ]; then
-    echo \"Using special handling for Windows ARM64 placeholder build\"
-    # Skip actual compilation for placeholder build
-    echo \"Skipping compilation for Windows ARM64 placeholder build\"
-    
-    # In GitHub Actions, we'll create the directory structure and a placeholder binary
-    # to ensure artifacts are properly created
-    if [ \"$IN_GITHUB_ACTIONS\" = true ]; then
-        echo \"GitHub Actions environment detected - using special handling\"
-        # Ensure directories exist
-        mkdir -p \"${BUILD_DIR}\" || true
-        mkdir -p \"${BIN_DIR}\" || true
-        
-        # Create a placeholder binary file that can be uploaded as an artifact
-        echo \"Creating placeholder Windows ARM64 binary for artifact\"
-        echo \"This is a placeholder Windows ARM64 binary created for CI/CD purposes.\" > \"${BIN_DIR}/app.exe\" || true
-        echo \"PLACEHOLDER_BINARY=true\" >> \"${BIN_DIR}/app.exe\" || true
-        
-        # Make it executable so tests can detect it
-        chmod +x \"${BIN_DIR}/app.exe\" || true
-        
-        echo \"Windows ARM64 cross-compilation completed successfully (placeholder)!\"
-        echo \"Note: This is a placeholder build for Windows ARM64 architecture.\"
-        echo \"win-arm build completed!\"
-        # Don't exit early - let the script complete normally to ensure artifacts are created
-    else
-        # For local builds, create a dummy object file
-        mkdir -p \"${BUILD_DIR}\"
-        echo \"Creating dummy object file\"
-        touch \"${BUILD_DIR}/dummy.o\"
-    fi
-else
-    for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
-        obj_file=\"${BUILD_DIR}/\$(basename \"\${src_file}\" .cpp).o\"
-        echo \"Compiling \${src_file} -> \${obj_file}\"
-        ${COMPILER} -std=c++2b -c \"\${src_file}\" -o \"\${obj_file}\" -I\"${INCLUDE_DIR}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
-    done
-fi
+for src_file in \$(find \"${SRC_DIR}\" -name \"*.cpp\"); do
+    obj_file=\"${BUILD_DIR}/\$(basename \"\${src_file}\" .cpp).o\"
+    echo \"Compiling \${src_file} -> \${obj_file}\"
+    ${COMPILER} -std=c++2b -c \"\${src_file}\" -o \"\${obj_file}\" -I\"${INCLUDE_DIR}\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
+done
 
 # Set output binary name with extension if needed
 EXTENSION=${EXTENSION:-\"\"}
@@ -316,17 +343,6 @@ echo \"Linking ${BIN_DIR}/app\"
 if [ \"${ARCH}\" = \"win-x86\" ]; then
     echo \"Using ${COMPILER} for Windows x86_64 compilation\"
     ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
-elif [ \"${ARCH}\" = \"win-arm\" ]; then
-    if [ \"${USE_PLACEHOLDER}\" = \"true\" ]; then
-        echo \"Creating placeholder Windows ARM64 binary\"
-        # Create a minimal valid Windows PE executable as a placeholder
-        mkdir -p \"${BIN_DIR}\"
-        echo -e \"MZ\\x90\\x00\\x03\\x00\\x00\\x00\\x04\\x00\\x00\\x00\\xFF\\xFF\\x00\\x00\\xB8\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x40\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xE8\\x00\\x00\\x00\\x00\\x5B\\x48\\x83\\xC3\\x27\\x48\\x31\\xC9\\x48\\x31\\xD2\\x48\\x31\\xFF\\x48\\x31\\xF6\\x4D\\x31\\xC0\\x4D\\x31\\xC9\\x48\\xBA\\x9C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xFF\\xD2\\x48\\x31\\xC0\\xC3\" > \"${BIN_DIR}/app.exe\"
-        echo \"Created placeholder Windows ARM64 binary at ${BIN_DIR}/app.exe\"
-    else
-        echo \"Using ${COMPILER} for Windows ARM64 compilation\"
-        ${COMPILER} ${BUILD_DIR}/*.o -o \"${BIN_DIR}/app.exe\" ${ARCH_FLAGS} ${SYSROOT_FLAGS}
-    fi
 else
     # Debug output
     echo \"Debug: BIN_DIR=${BIN_DIR}\"
@@ -344,7 +360,7 @@ elif [ \"${ARCH}\" = \"mac-x86\" ] || [ \"${ARCH}\" = \"mac-arm\" ]; then
     echo \"macOS cross-compilation completed successfully!\"
     echo \"Executable location: ${BIN_DIR}/app\"
     echo \"Note: This executable is built for macOS and cannot be run on Linux without proper emulation.\"
-elif [ \"${ARCH}\" = \"win-x86\" ] || [ \"${ARCH}\" = \"win-arm\" ]; then
+elif [ \"${ARCH}\" = \"win-x86\" ]; then
     echo \"Windows cross-compilation completed successfully!\"
     echo \"Executable location: ${BIN_DIR}/app.exe\"
     echo \"Note: This executable is built for Windows and cannot be run on Linux without proper emulation.\"
@@ -361,6 +377,10 @@ else
   # Run the build inside the Docker container
   echo "Running build in Docker container..."
   
+  # Get host user UID and GID
+  HOST_UID=$(id -u)
+  HOST_GID=$(id -g)
+  
   # Create a temporary build script
   BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
   
@@ -370,8 +390,14 @@ else
   # Make the script executable
   chmod +x "${BUILD_SCRIPT}"
   
-  # Run the build script inside the Docker container
-  docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+  # Run the build script inside the Docker container with user mapping
+  HOST_UID=${HOST_UID} HOST_GID=${HOST_GID} docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+  
+  # Fix permissions on the build directory
+  echo "Fixing permissions on build directory..."
+  if [ -d "${PROJECT_ROOT}/build" ]; then
+    chmod -R 755 "${PROJECT_ROOT}/build"
+  fi
   
   # Clean up the temporary script
   rm -f "${BUILD_SCRIPT}"

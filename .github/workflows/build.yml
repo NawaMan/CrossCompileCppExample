@@ -36,10 +36,7 @@ jobs:
     - name: Build Windows x86_64
       run: ./scripts/build.sh win-x86
       
-    # Windows ARM64 build will use placeholder approach
-    - name: Build Windows ARM64
-      run: ./scripts/build.sh win-arm
-      
+
     # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
       run: ./scripts/build.sh mac-x86
@@ -83,12 +80,7 @@ jobs:
         path: build/win-x86/bin/
         retention-days: 1
         
-    - name: Upload Windows ARM64 artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: win-arm-binaries
-        path: build/win-arm/bin/
-        retention-days: 1
+
 
   # Test jobs for each platform
   test-linux-x86:

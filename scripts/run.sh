@@ -48,10 +48,6 @@ while [[ $# -gt 0 ]]; do
       ARCH="win-x86"
       shift
       ;;
-    win-arm)
-      ARCH="win-arm"
-      shift
-      ;;
     -h|--help)
       echo "Usage: $0 <architecture> [-- <application arguments>]"
       echo "Architectures:"
@@ -59,8 +55,7 @@ while [[ $# -gt 0 ]]; do
       echo "  linux-arm    Run Linux ARM64 binary (using Docker with QEMU emulation)"
       echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
       echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
-      echo "  win-x86      Run Windows x86_64 binary (using Wine emulation)"
-      echo "  win-arm      Run Windows ARM64 binary (using emulation)"
+      echo "  win-x86      Run Windows x86_64 binary (using Wine)"
       echo "Options:"
       echo "  -h, --help   Show this help message"
       exit 0
@@ -87,7 +82,6 @@ if [ -z "$ARCH" ]; then
   echo "  mac-x86      Run macOS x86_64 binary (using emulation)"
   echo "  mac-arm      Run macOS ARM64 binary (using emulation)"
   echo "  win-x86      Run Windows x86_64 binary (using Wine emulation)"
-  echo "  win-arm      Run Windows ARM64 binary (using emulation)"
   echo "Options:"
   echo "  -h, --help   Show this help message"
   exit 0
@@ -127,6 +121,10 @@ if [ "${ARCH}" = "linux-arm" ]; then
     echo "File size: ${FILE_SIZE} bytes, Last modified: ${LAST_MODIFIED}"
     echo ""
 
+    # Get host user UID and GID
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
     # Set up QEMU for ARM64 emulation
     echo "Setting up QEMU for ARM64 emulation..."
     # Use Docker directly without sudo by ensuring the user is in the docker group
@@ -157,6 +155,8 @@ if [ "${ARCH}" = "linux-arm" ]; then
         # Use Ubuntu 24.04 as the base image for ARM64 emulation
         docker run --rm -v "${PROJECT_ROOT}:/app" \
             --platform linux/arm64 \
+            -e HOST_UID=${HOST_UID} \
+            -e HOST_GID=${HOST_GID} \
             ubuntu:24.04 \
             /app/build/linux-arm/bin/app "$@"
     fi
@@ -308,44 +308,7 @@ elif [ "${ARCH}" = "win-x86" ]; then
         echo 'Running Windows binary using Wine...'
         wine /app/build/win-x86/bin/app.exe $@
     "
-elif [ "${ARCH}" = "win-arm" ]; then
-    # For Windows ARM64, use emulation
-    echo "Setting up emulation for Windows ARM64..."
-    echo "Running Windows ARM64 binary using emulation: ${APP_PATH}"
-    echo "----------------------------------------"
-    
-    # Use Docker to simulate running a Windows ARM64 binary
-    # Note: This is a simplified example. In a real-world scenario, 
-    # you would need a proper Windows ARM64 emulation environment.
-    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm dev bash -c "
-        echo \"Note: This is a simulated run of a Windows ARM64 binary.\"
-        echo \"In a real environment, you would need proper Windows ARM64 emulation.\"
-        echo \"\"
-        echo \"Hello from Modern C++ Cross-Compilation Example!\"
-        echo \"Running with 1 arguments\"
-        echo \"Argument 0: /app/build/${ARCH}/bin/app.exe\"
-        
-        for arg in \$@; do
-            echo \"Argument: \$arg\"
-        done
-        
-        echo \"\"
-        echo \"Original items:\"
-        echo \"apple\"
-        echo \"banana\"
-        echo \"cherry\"
-        echo \"\"
-        echo \"Added 'date' at index 3, newly added: yes\"
-        echo \"\"
-        echo \"After transformation:\"
-        echo \"fruit: apple\"
-        echo \"fruit: banana\"
-        echo \"fruit: cherry\"
-        echo \"fruit: date\"
-        echo \"\"
-        echo \"Item at index 1: fruit: banana\"
-        echo \"Item at index 10 exists: no\"
-    "
+
 else
     echo "Error: Unsupported architecture: ${ARCH}"
     exit 1

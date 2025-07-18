@@ -21,8 +21,17 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     python3 \
     python3-pip \
+    ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+    
+# Install gosu for permission handling
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y gosu; \
+    rm -rf /var/lib/apt/lists/*; \
+    # verify that the binary works
+    gosu nobody true
 
 # Install Clang (latest version for C++23 support)
 RUN apt-get update && apt-get install -y \
@@ -111,6 +120,13 @@ RUN echo '#!/bin/bash' > /usr/bin/aarch64-w64-mingw32-clang++ && \
 
 # Set working directory
 WORKDIR /app
+
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Default command
 CMD ["/bin/bash"]
