@@ -208,9 +208,25 @@ elif [ "$ARCH" = "linux-arm" ]; then
   if [ "$IN_GITHUB_ACTIONS" = true ]; then
     # Run build directly on GitHub Actions runner
     echo "Running build directly on GitHub Actions runner..."
-    COMPILER="clang++"
-    ARCH_FLAGS="--target=aarch64-linux-gnu -march=armv8-a"
-    SYSROOT_FLAGS=""
+    
+    # Make sure ARM64 cross-compilation tools are installed
+    if ! dpkg -l | grep -q crossbuild-essential-arm64; then
+      echo "Installing ARM64 cross-compilation tools..."
+      sudo apt-get update -qq
+      sudo apt-get install -qq -y crossbuild-essential-arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+    fi
+    
+    # Use the GCC cross-compiler directly instead of Clang
+    if command -v aarch64-linux-gnu-g++ &> /dev/null; then
+      echo "Using aarch64-linux-gnu-g++ compiler"
+      COMPILER="aarch64-linux-gnu-g++"
+      # No need for additional flags when using the cross-compiler directly
+      ARCH_FLAGS=""
+      SYSROOT_FLAGS=""
+    else
+      echo "Error: aarch64-linux-gnu-g++ not found"
+      exit 1
+    fi
   else
     # Run the build inside Docker container
     echo "Running build in Docker container..."
@@ -263,6 +279,12 @@ elif [ "$ARCH" = "mac-x86" ]; then
     echo "Linking $BIN_DIR/mac-x86/app"
     $MACOS_COMPILER $MACOS_TARGET -std=c++2b "$BUILD_DIR/mac-x86/main.o" -o "$BIN_DIR/mac-x86/app"
     
+    # Set the compiler for the main build section
+    COMPILER="$MACOS_COMPILER"
+    COMPILER_FLAGS="-std=c++2b $MACOS_TARGET"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS=""
+    
     echo "macOS x86_64 cross-compilation completed successfully!"
     echo "Executable location: $BIN_DIR/mac-x86/app"
     echo "Note: This executable is built for macOS and cannot be run on Linux without proper emulation."
@@ -291,6 +313,12 @@ HEXDUMP
     
     # Make the binary executable
     chmod +x "${PROJECT_ROOT}/build/mac-x86/bin/app"
+    
+    # Set the compiler for the main build section
+    COMPILER="echo"
+    COMPILER_FLAGS="Placeholder binary used - no actual compilation performed"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS=""
     
     echo "macOS x86_64 placeholder created at ${PROJECT_ROOT}/build/mac-x86/bin/app"
   fi
@@ -327,6 +355,12 @@ elif [ "$ARCH" = "mac-arm" ]; then
     echo "Linking $BIN_DIR/mac-arm/app"
     $MACOS_COMPILER $MACOS_TARGET -std=c++2b "$BUILD_DIR/mac-arm/main.o" -o "$BIN_DIR/mac-arm/app"
     
+    # Set the compiler for the main build section
+    COMPILER="$MACOS_COMPILER"
+    COMPILER_FLAGS="-std=c++2b $MACOS_TARGET"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS=""
+    
     echo "macOS ARM64 cross-compilation completed successfully!"
     echo "Executable location: $BIN_DIR/mac-arm/app"
     echo "Note: This executable is built for macOS and cannot be run on Linux without proper emulation."
@@ -356,6 +390,12 @@ HEXDUMP
     # Make the binary executable
     chmod +x "${PROJECT_ROOT}/build/mac-arm/bin/app"
     
+    # Set the compiler for the main build section
+    COMPILER="echo"
+    COMPILER_FLAGS="Placeholder binary used - no actual compilation performed"
+    ARCH_FLAGS=""
+    SYSROOT_FLAGS=""
+    
     echo "macOS ARM64 placeholder created at ${PROJECT_ROOT}/build/mac-arm/bin/app"
   fi
 elif [ "$ARCH" = "win-x86" ]; then
@@ -365,6 +405,20 @@ elif [ "$ARCH" = "win-x86" ]; then
   if [ "$IN_GITHUB_ACTIONS" = true ]; then
     # Run build directly on GitHub Actions runner
     echo "Running build directly on GitHub Actions runner..."
+    
+    # Make sure Windows cross-compilation tools are installed
+    if ! command -v x86_64-w64-mingw32-g++ &> /dev/null; then
+      echo "Installing Windows cross-compilation tools..."
+      sudo apt-get update -qq
+      sudo apt-get install -qq -y mingw-w64 g++-mingw-w64-x86-64 wine64
+    fi
+    
+    # Verify compiler is available
+    if ! command -v x86_64-w64-mingw32-g++ &> /dev/null; then
+      echo "Error: Windows cross-compiler (x86_64-w64-mingw32-g++) not found"
+      exit 1
+    fi
+    
     COMPILER="x86_64-w64-mingw32-g++"
     # Use static linking for Windows builds to avoid DLL dependencies
     ARCH_FLAGS="-static"

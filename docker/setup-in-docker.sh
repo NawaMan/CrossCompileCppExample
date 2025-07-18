@@ -19,7 +19,21 @@ if [ "$SETUP_ARM64" = "true" ]; then
     echo "Installing ARM64 cross-compilation tools..."
     apt-get install -qq -y \
         crossbuild-essential-arm64 \
-        qemu-user-static
+        qemu-user-static \
+        libc6-dev-arm64-cross \
+        libstdc++-10-dev-arm64-cross \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu
+        
+    # Create symlinks for ARM64 libraries if they don't exist
+    mkdir -p /usr/aarch64-linux-gnu/lib
+    if [ ! -e /usr/aarch64-linux-gnu/lib/libm.so.6 ] && [ -e /usr/aarch64-linux-gnu/lib/aarch64-linux-gnu/libm.so.6 ]; then
+        ln -sf /usr/aarch64-linux-gnu/lib/aarch64-linux-gnu/libm.so.6 /usr/aarch64-linux-gnu/lib/libm.so.6
+    fi
+    
+    if [ ! -e /usr/aarch64-linux-gnu/lib/libmvec.so.1 ] && [ -e /usr/aarch64-linux-gnu/lib/aarch64-linux-gnu/libmvec.so.1 ]; then
+        ln -sf /usr/aarch64-linux-gnu/lib/aarch64-linux-gnu/libmvec.so.1 /usr/aarch64-linux-gnu/lib/libmvec.so.1
+    fi
 fi
 
 # Install Windows cross-compilation tools if needed
