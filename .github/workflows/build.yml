@@ -178,10 +178,6 @@ jobs:
         ls -la build/mac-x86/bin/
         file build/mac-x86/bin/app
         
-    - name: Run binary executable
-      run: |
-        ./build/mac-x86/bin/app
-        
     - name: Test macOS x86_64 build
       run: ./scripts/test.sh mac-x86
 
