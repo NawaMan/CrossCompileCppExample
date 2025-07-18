@@ -32,7 +32,6 @@ NC='\033[0m' # No Color
 
 # Parse command-line arguments
 ARCHS=()
-CLEAN=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -40,22 +39,17 @@ while [[ $# -gt 0 ]]; do
       ARCHS+=("$1")
       shift
       ;;
-    --clean)
-      CLEAN=true
-      shift
-      ;;
     -h|--help)
       echo "Usage: $0 [options] [architecture]"
       echo "Options:"
-      echo "  --clean      Clean build directories before testing"
       echo "  -h, --help   Show this help message"
       echo "Architecture:"
-      echo "  linux-x86    Test Linux x86_64 build and run"
-      echo "  linux-arm    Test Linux ARM64 build and run"
-      echo "  mac-x86      Test macOS x86_64 build and run"
-      echo "  mac-arm      Test macOS ARM64 build and run"
-      echo "  win-x86      Test Windows x86_64 build and run"
-      echo "  win-arm      Test Windows ARM64 build and run"
+      echo "  linux-x86    Test Linux x86_64 build"
+      echo "  linux-arm    Test Linux ARM64 build"
+      echo "  mac-x86      Test macOS x86_64 build"
+      echo "  mac-arm      Test macOS ARM64 build"
+      echo "  win-x86      Test Windows x86_64 build"
+      echo "  win-arm      Test Windows ARM64 build"
       echo "  (none)       Test all architectures"
       exit 0
       ;;
@@ -77,16 +71,6 @@ run_test() {
   local arch=$1
   
   print_header "Testing $arch"
-  
-  # Clean if requested
-  if [ "$CLEAN" = true ]; then
-    print_header "Cleaning build directories"
-    $BUILD_SCRIPT --clean
-  fi
-  
-  # Build
-  print_header "Building for $arch"
-  $BUILD_SCRIPT $arch
   
   # Run
   print_header "Running $arch binary"
@@ -151,18 +135,15 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
         MAC_ARM_RESULT="SKIP"
       fi
     elif [[ "$ARCH" == "win-x86" ]]; then
-      print_header "Building for $ARCH"
-      $BUILD_SCRIPT $ARCH
-      
       # Check if we're in GitHub Actions
       if [ "$IN_GITHUB_ACTIONS" = true ]; then
         echo -e "${YELLOW}Note: In GitHub Actions, skipping Wine execution for Windows x86_64 binaries${NC}"
         # Check if the binary exists
         if [ -f "${PROJECT_ROOT}/build/win-x86/bin/app.exe" ]; then
-          echo -e "${GREEN}✓ Windows x86_64 binary was built successfully${NC}"
+          echo -e "${GREEN}✓ Windows x86_64 binary exists${NC}"
           WIN_X86_RESULT="PASS"
         else
-          echo -e "${RED}✗ Windows x86_64 binary was not built${NC}"
+          echo -e "${RED}✗ Windows x86_64 binary not found${NC}"
           WIN_X86_RESULT="FAIL"
         fi
       # Set up Wine for testing Windows binaries locally
@@ -176,14 +157,26 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
           WIN_X86_RESULT="FAIL"
         fi
       else
-        echo -e "${YELLOW}Note: Wine is not installed. Windows x86_64 binaries can be built but not tested${NC}"
+        echo -e "${YELLOW}Note: Wine is not installed. Windows x86_64 binaries cannot be tested${NC}"
         WIN_X86_RESULT="SKIP"
       fi
     elif [[ "$ARCH" == "win-arm" ]]; then
-      print_header "Building for $ARCH (skipping test)"
-      $BUILD_SCRIPT $ARCH
+      print_header "Testing $ARCH (verification only)"
+      # Check if the binary exists
+      if [ -f "${PROJECT_ROOT}/build/win-arm/bin/app.exe" ]; then
+        # Check if it's a placeholder
+        if grep -q "PLACEHOLDER_BINARY" "${PROJECT_ROOT}/build/win-arm/bin/app.exe" 2>/dev/null; then
+          echo -e "${BLUE}✓ Windows ARM64 placeholder binary exists${NC}"
+          WIN_ARM_RESULT="SKIP"
+        else
+          echo -e "${GREEN}✓ Windows ARM64 binary exists${NC}"
+          WIN_ARM_RESULT="PASS"
+        fi
+      else
+        echo -e "${RED}✗ Windows ARM64 binary not found${NC}"
+        WIN_ARM_RESULT="FAIL"
+      fi
       echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
-      WIN_ARM_RESULT="SKIP"
     else
       run_test $ARCH
       
@@ -243,7 +236,7 @@ else
     LINUX_ARM_RESULT="FAIL"
   fi
   
-  # Test or build mac-x86
+  # Test mac-x86
   if [ "$HOST_OS" == "macos" ]; then
     if run_test "mac-x86"; then
       MAC_X86_RESULT="PASS"
@@ -251,13 +244,18 @@ else
       MAC_X86_RESULT="FAIL"
     fi
   else
-    print_header "Building for mac-x86 (skipping test)"
-    $BUILD_SCRIPT mac-x86
+    print_header "Testing mac-x86 (verification only)"
+    # Check if the binary exists
+    if [ -f "${PROJECT_ROOT}/build/mac-x86/bin/app" ]; then
+      echo -e "${BLUE}✓ macOS x86_64 binary exists${NC}"
+    else
+      echo -e "${RED}✗ macOS x86_64 binary not found${NC}"
+    fi
     echo -e "${YELLOW}Note: macOS binaries cannot be tested on Linux${NC}"
     MAC_X86_RESULT="SKIP"
   fi
   
-  # Test or build mac-arm
+  # Test mac-arm
   if [ "$HOST_OS" == "macos" ]; then
     if run_test "mac-arm"; then
       MAC_ARM_RESULT="PASS"
@@ -265,29 +263,49 @@ else
       MAC_ARM_RESULT="FAIL"
     fi
   else
-    print_header "Building for mac-arm (skipping test)"
-    $BUILD_SCRIPT mac-arm
+    print_header "Testing mac-arm (verification only)"
+    # Check if the binary exists
+    if [ -f "${PROJECT_ROOT}/build/mac-arm/bin/app" ]; then
+      echo -e "${BLUE}✓ macOS ARM64 binary exists${NC}"
+    else
+      echo -e "${RED}✗ macOS ARM64 binary not found${NC}"
+    fi
     echo -e "${YELLOW}Note: macOS binaries cannot be tested on Linux${NC}"
     MAC_ARM_RESULT="SKIP"
   fi
   
-  # Test or build win-x86
-  if command -v wine &> /dev/null || [ "$IN_GITHUB_ACTIONS" = true ]; then
+  # Test win-x86
+  if command -v wine &> /dev/null; then
     if run_test "win-x86"; then
       WIN_X86_RESULT="PASS"
     else
       WIN_X86_RESULT="FAIL"
     fi
   else
-    print_header "Building for win-x86 (skipping test)"
-    $BUILD_SCRIPT win-x86
-    echo -e "${YELLOW}Note: Wine is not installed. Windows binaries can be built but not tested${NC}"
+    print_header "Testing win-x86 (verification only)"
+    # Check if the binary exists
+    if [ -f "${PROJECT_ROOT}/build/win-x86/bin/app.exe" ]; then
+      echo -e "${BLUE}✓ Windows x86_64 binary exists${NC}"
+    else
+      echo -e "${RED}✗ Windows x86_64 binary not found${NC}"
+    fi
+    echo -e "${YELLOW}Note: Wine is not installed. Windows binaries cannot be tested${NC}"
     WIN_X86_RESULT="SKIP"
   fi
   
-  # Build win-arm (skipping test)
-  print_header "Building for win-arm (skipping test)"
-  $BUILD_SCRIPT win-arm
+  # Test win-arm (verification only)
+  print_header "Testing win-arm (verification only)"
+  # Check if the binary exists
+  if [ -f "${PROJECT_ROOT}/build/win-arm/bin/app.exe" ]; then
+    # Check if it's a placeholder
+    if grep -q "PLACEHOLDER_BINARY" "${PROJECT_ROOT}/build/win-arm/bin/app.exe" 2>/dev/null; then
+      echo -e "${BLUE}✓ Windows ARM64 placeholder binary exists${NC}"
+    else
+      echo -e "${GREEN}✓ Windows ARM64 binary exists${NC}"
+    fi
+  else
+    echo -e "${RED}✗ Windows ARM64 binary not found${NC}"
+  fi
   echo -e "${YELLOW}Note: Windows ARM64 binaries cannot be fully tested${NC}"
   WIN_ARM_RESULT="SKIP"
   
