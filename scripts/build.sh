@@ -403,46 +403,56 @@ else
     echo \"Executable location: ${BIN_DIR}/app\"
 fi"
 
-if [ "$IN_GITHUB_ACTIONS" = true ]; then
-  # Run build script directly on the host when in GitHub Actions
-  echo "Running build directly on runner..."
-  eval "$BUILD_SCRIPT_CONTENT"
+# Skip the actual compilation for macOS builds if we've already created placeholder binaries
+if [[ "$ARCH" == mac-* ]] && ! (command -v o64-clang++ &> /dev/null || command -v x86_64-apple-darwin-clang++ &> /dev/null || command -v arm64-apple-darwin-clang++ &> /dev/null); then
+  echo "Skipping compilation for macOS builds, using placeholder binaries..."
+  # We've already created the placeholder binaries in the architecture-specific sections
+  # No need to run the build script
 else
-  # Run the build inside the Docker container
-  echo "Running build in Docker container..."
-  
-  # Get host user UID and GID
-  HOST_UID=$(id -u)
-  HOST_GID=$(id -g)
-  
-  # Create a temporary build script
-  BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
-  
-  # Create the build script with proper commands
-  echo "$BUILD_SCRIPT_CONTENT" > "${BUILD_SCRIPT}"
-  
-  # Make the script executable
-  chmod +x "${BUILD_SCRIPT}"
-  
-  # Skip Docker for macOS builds since they use direct placeholders or osxcross
-if [[ "$ARCH" == mac-* ]]; then
-  echo "Skipping Docker for macOS builds, using direct placeholder generation..."
-  # For macOS builds, we'll handle them directly without Docker
-  # The actual build logic is in the architecture-specific sections
-else
-  # Run the build inside the Docker container for non-macOS architectures
-  HOST_UID=$(id -u)
-  HOST_GID=$(id -g)
-  docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm --user "${HOST_UID}:${HOST_GID}" -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
-fi
-  
-  # Fix permissions on the build directory
-  echo "Fixing permissions on build directory..."
-  if [ -d "${PROJECT_ROOT}/build" ]; then
-    chmod -R 755 "${PROJECT_ROOT}/build"
+  # For non-macOS builds or when osxcross is available, proceed with normal build
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Run build script directly on the host when in GitHub Actions
+    echo "Running build directly on runner..."
+    eval "$BUILD_SCRIPT_CONTENT"
+  else
+    # Run the build inside the Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Create a temporary build script
+    BUILD_SCRIPT="${PROJECT_ROOT}/.tmp_build_script.sh"
+    
+    # Create the build script with proper commands
+    echo "$BUILD_SCRIPT_CONTENT" > "${BUILD_SCRIPT}"
+    
+    # Make the script executable
+    chmod +x "${BUILD_SCRIPT}"
+    
+    # Skip Docker for macOS builds since they use direct placeholders or osxcross
+    if [[ "$ARCH" == mac-* ]]; then
+      echo "Skipping Docker for macOS builds, using direct placeholder generation..."
+      # For macOS builds, we'll handle them directly without Docker
+      # The actual build logic is in the architecture-specific sections
+    else
+      # Run the build inside the Docker container for non-macOS architectures
+      HOST_UID=$(id -u)
+      HOST_GID=$(id -g)
+      docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm --user "${HOST_UID}:${HOST_GID}" -v "${BUILD_SCRIPT}:/tmp/build.sh" dev /tmp/build.sh
+    fi
   fi
-  
-  # Clean up the temporary script
+fi
+
+# Fix permissions on the build directory
+echo "Fixing permissions on build directory..."
+if [ -d "${PROJECT_ROOT}/build" ]; then
+  chmod -R 755 "${PROJECT_ROOT}/build"
+fi
+
+# Clean up the temporary script if it exists
+if [ -f "${BUILD_SCRIPT}" ]; then
   rm -f "${BUILD_SCRIPT}"
 fi
 
