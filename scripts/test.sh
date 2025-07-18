@@ -72,9 +72,20 @@ run_test() {
   
   print_header "Testing $arch"
   
-  # Run
-  print_header "Running $arch binary"
-  OUTPUT=$($RUN_SCRIPT $arch)
+  # Run the binary with TESTING_MODE enabled for consistent output
+  echo "==== Running $arch binary ===="
+  export TESTING_MODE=true
+  OUTPUT=$($RUN_SCRIPT $arch 2>&1)
+  unset TESTING_MODE
+  
+  # Display the output
+  echo "$OUTPUT"
+  
+  # Check exit code
+  if [ $? -ne 0 ]; then
+    echo -e "${RED}✗ Binary execution failed${NC}"
+    return 1
+  fi
   
   # Verify output
   print_header "Verifying output"
