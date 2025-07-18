@@ -50,6 +50,8 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: ./scripts/build.sh win-x86
       
+    # This is a cross-compiled Windows binary from Linux, which might have issues
+      
     # Windows ARM64 build will use placeholder approach
     # No special setup needed as we'll use the placeholder binary approach
         
@@ -167,7 +169,25 @@ jobs:
     - name: Test Windows x86_64
       shell: pwsh
       run: |
+        # Show directory structure for debugging
+        Write-Host "Checking build directory structure:"
+        Get-ChildItem -Path "build" -Recurse | Select-Object FullName
+        
+        # Check if Windows binary exists and show its details
+        $BinaryPath = "build/win-x86/bin/app.exe"
+        if (Test-Path $BinaryPath) {
+            Write-Host "Windows binary exists at $BinaryPath"
+            Get-Item $BinaryPath | Select-Object FullName, Length, LastWriteTime
+            
+            # Try running the binary directly to see output
+            Write-Host "Running binary directly:"
+            & ./$BinaryPath
+        } else {
+            Write-Host "ERROR: Windows binary not found at $BinaryPath"
+        }
+        
         # Use the PowerShell test script for Windows
+        Write-Host "Running test script:"
         ./scripts/test.ps1 win-x86
 
   # Test macOS binaries on macOS runner
