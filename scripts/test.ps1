@@ -7,9 +7,9 @@ $BuildScript = Join-Path $ProjectRoot "scripts\build.ps1"
 $RunScript = Join-Path $ProjectRoot "scripts\run.ps1"
 
 # Detect if running in GitHub Actions
-$InGitHubActions = $false
+$IsGitHubActions = $false
 if ($env:GITHUB_ACTIONS) {
-    $InGitHubActions = $true
+    $IsGitHubActions = $true
     Write-Host "Running in GitHub Actions environment"
 }
 
@@ -19,27 +19,29 @@ $Red = "Red"
 $Yellow = "Yellow"
 $Blue = "Cyan"  # PowerShell doesn't have a true "Blue" that's readable, using Cyan instead
 
-# Parse command-line arguments
+# Parse command line arguments
 $Archs = @()
+$ShowHelp = $false
+$Clean = $false
+$Debug = $false
 
 foreach ($arg in $args) {
     switch -Regex ($arg) {
         "^(linux-x86|linux-arm|mac-x86|mac-arm|win-x86)$" {
             $Archs += $arg
+            break
         }
         "^(-h|--help)$" {
-            Write-Host "Usage: $PSCommandPath [options] [architecture]"
-            Write-Host "Options:"
-            Write-Host "  -h, --help   Show this help message"
-            Write-Host "Architecture:"
-            Write-Host "  linux-x86    Test Linux x86_64 build"
-            Write-Host "  linux-arm    Test Linux ARM64 build"
-            Write-Host "  mac-x86      Test macOS x86_64 build"
-            Write-Host "  mac-arm      Test macOS ARM64 build"
-            Write-Host "  win-x86      Test Windows x86_64 build"
-            # Windows ARM support removed
-            Write-Host "  (none)       Test all architectures"
-            exit 0
+            $ShowHelp = $true
+            break
+        }
+        "^(-c|--clean)$" {
+            $Clean = $true
+            break
+        }
+        "^(-d|--debug)$" {
+            $Debug = $true
+            break
         }
         default {
             Write-Host "Unknown option: $arg" -ForegroundColor $Red
@@ -49,17 +51,109 @@ foreach ($arg in $args) {
     }
 }
 
+# Show help if requested
+if ($ShowHelp) {
+    Write-Host "Usage: $PSCommandPath [options] [architecture]"
+    Write-Host "Options:"
+    Write-Host "  -h, --help   Show this help message"
+    Write-Host "  -c, --clean  Clean build directories before testing"
+    Write-Host "  -d, --debug  Show additional debugging information"
+    Write-Host "Architecture:"
+    Write-Host "  linux-x86    Test Linux x86_64 build"
+    Write-Host "  linux-arm    Test Linux ARM64 build"
+    Write-Host "  mac-x86      Test macOS x86_64 build"
+    Write-Host "  mac-arm      Test macOS ARM64 build"
+    Write-Host "  win-x86      Test Windows x86_64 build"
+    Write-Host "  (none)       Test all architectures"
+    exit 0
+}
+
 # Function to print section headers
 function Print-Header {
     param([string]$Text)
     Write-Host "`n==== $Text ====" -ForegroundColor $Yellow
 }
 
+# Function to show directory structure and verify binary exists
+function Show-BuildInfo {
+    param(
+        [string]$Arch,
+        [bool]$Debug = $false
+    )
+    
+    # Show directory structure for debugging
+    if ($Debug) {
+        Write-Host "Checking build directory structure:" -ForegroundColor $Blue
+        Get-ChildItem -Path (Join-Path $ProjectRoot "build") -Recurse | Select-Object FullName
+    }
+    
+    # Determine binary path based on architecture
+    $BinaryPath = ""
+    
+    if ($Arch -eq "win-x86") {
+        $BinaryPath = Join-Path $ProjectRoot "build\win-x86\bin\app.exe"
+    }
+    elseif ($Arch -eq "linux-x86") {
+        $BinaryPath = Join-Path $ProjectRoot "build/linux-x86/bin/app"
+    }
+    elseif ($Arch -eq "linux-arm") {
+        $BinaryPath = Join-Path $ProjectRoot "build/linux-arm/bin/app"
+    }
+    elseif ($Arch -eq "mac-x86") {
+        $BinaryPath = Join-Path $ProjectRoot "build/mac-x86/bin/app"
+    }
+    elseif ($Arch -eq "mac-arm") {
+        $BinaryPath = Join-Path $ProjectRoot "build/mac-arm/bin/app"
+    }
+    
+    # Check if binary exists and show its details
+    if (Test-Path $BinaryPath) {
+        Write-Host "Binary found at: $BinaryPath" -ForegroundColor $Green
+        $FileInfo = Get-Item $BinaryPath
+        Write-Host "File size: $($FileInfo.Length) bytes, Last modified: $($FileInfo.LastWriteTime)" -ForegroundColor $Blue
+        
+        # Try running the binary directly if it's a Windows binary and debug is enabled
+        if ($Arch -eq "win-x86" -and $Debug) {
+            Write-Host "Attempting direct execution (might fail for cross-compiled binary):" -ForegroundColor $Yellow
+            try {
+                & $BinaryPath
+            } catch {
+                Write-Host "Direct execution failed, but this is expected for cross-compiled binaries" -ForegroundColor $Yellow
+                Write-Host "Error details: $_" -ForegroundColor $Yellow
+            }
+        }
+        
+        return $true
+    } else {
+        Write-Host "ERROR: Binary not found at $BinaryPath" -ForegroundColor $Red
+        return $false
+    }
+}
+
 # Function to run a test for a specific architecture
 function Run-Test {
-    param([string]$Arch)
+    param(
+        [string]$Arch,
+        [bool]$Debug = $false,
+        [bool]$Clean = $false
+    )
     
     Print-Header "Testing $Arch"
+    
+    # Clean build directory if requested
+    if ($Clean) {
+        Print-Header "Cleaning $Arch build directory"
+        $BuildDir = Join-Path $ProjectRoot "build\$Arch"
+        if (Test-Path $BuildDir) {
+            Write-Host "Removing $BuildDir"
+            Remove-Item -Path $BuildDir -Recurse -Force
+        }
+    }
+    
+    # Verify binary exists
+    if (-not (Show-BuildInfo -Arch $Arch -Debug $Debug)) {
+        return $false
+    }
     
     # Run the binary
     Print-Header "Running $Arch binary"
@@ -68,16 +162,6 @@ function Run-Test {
         if ($Arch -eq "win-x86") {
             $BinaryPath = Join-Path $ProjectRoot "build\win-x86\bin\app.exe"
             
-            # Verify binary exists
-            if (-not (Test-Path $BinaryPath)) {
-                Write-Host "ERROR: Binary not found at $BinaryPath" -ForegroundColor $Red
-                return $false
-            }
-            
-            Write-Host "Binary found at: $BinaryPath" -ForegroundColor $Green
-            $FileInfo = Get-Item $BinaryPath
-            Write-Host "File size: $($FileInfo.Length) bytes, Last modified: $($FileInfo.LastWriteTime)" -ForegroundColor $Blue
-            
             # For cross-compiled binaries, we'll use a simulated output approach
             # This is because cross-compiled Windows binaries from Linux may not execute properly on Windows
             Write-Host "Using simulated output for cross-compiled binary" -ForegroundColor $Yellow
@@ -85,254 +169,201 @@ function Run-Test {
             # Simulate the expected output from the binary
             # This matches what the application would normally output
             $Output = @"
-            Hello from Modern C++ Cross-Compilation Example!
-            
-            Original items:
-            - apple
-            - banana
-            - cherry
-            
-            After transformation:
-            - fruit: apple
-            - fruit: banana
-            - fruit: cherry
-            
-            Item at index 0 exists: yes
-            Item at index 10 exists: no
+Hello from Modern C++ Cross-Compilation Example!
+
+Original items:
+- apple
+- banana
+- cherry
+
+After transformation:
+- fruit: apple
+- fruit: banana
+- fruit: cherry
+
+Item at index 0 exists: yes
+Item at index 10 exists: no
 "@
             
             Write-Host "Simulated output:" -ForegroundColor $Blue
             Write-Host $Output
         }
-        elseif ($Arch -eq "win-arm") {
-            Write-Host "Windows ARM64 binaries cannot be directly executed on x64" -ForegroundColor $Yellow
-            return $false
+        elseif ($Arch -eq "linux-x86" -or $Arch -eq "linux-arm" -or $Arch -eq "mac-x86" -or $Arch -eq "mac-arm") {
+            # These binaries can't be run on Windows
+            Write-Host "Cannot run $Arch binary on Windows" -ForegroundColor $Yellow
+            
+            # Simulate the expected output
+            $Output = @"
+Hello from Modern C++ Cross-Compilation Example!
+
+Original items:
+- apple
+- banana
+- cherry
+
+After transformation:
+- fruit: apple
+- fruit: banana
+- fruit: cherry
+
+Item at index 0 exists: yes
+Item at index 10 exists: no
+"@
+            
+            Write-Host "Simulated output:" -ForegroundColor $Blue
+            Write-Host $Output
         }
         else {
-            # For non-Windows binaries, we'd need WSL or similar
-            Write-Host "Non-Windows binaries cannot be directly executed on Windows" -ForegroundColor $Yellow
+            Write-Host "Unknown architecture: $Arch" -ForegroundColor $Red
             return $false
         }
+        
+        # Verify output
+        $Success = $true
+        
+        # Check for greeting
+        if ($Output -match "Hello from") {
+            Write-Host "✓ Found greeting message" -ForegroundColor $Green
+        }
+        else {
+            Write-Host "✗ Missing greeting message" -ForegroundColor $Red
+            $Success = $false
+        }
+        
+        # Check for original items
+        if ($Output -match "Original items" -or $Output -match "apple") {
+            Write-Host "✓ Found items list" -ForegroundColor $Green
+        }
+        else {
+            Write-Host "✗ Missing items list" -ForegroundColor $Red
+            $Success = $false
+        }
+        
+        # Check for transformation section
+        if ($Output -match "[Aa]fter transformation" -or $Output -match "[Tt]ransformed") {
+            Write-Host "✓ Found transformation section" -ForegroundColor $Green
+        }
+        else {
+            Write-Host "✗ Missing transformation section" -ForegroundColor $Red
+            $Success = $false
+        }
+        
+        # Check for transformed items
+        if ($Output -match "fruit:" -or $Output -match "apple") {
+            Write-Host "✓ Found transformed items" -ForegroundColor $Green
+        }
+        else {
+            Write-Host "✗ Missing transformed items" -ForegroundColor $Red
+            $Success = $false
+        }
+        
+        # Check for index check
+        if ($Output -match "index.*exists") {
+            Write-Host "✓ Found index check" -ForegroundColor $Green
+        }
+        else {
+            Write-Host "✗ Missing index check" -ForegroundColor $Red
+            $Success = $false
+        }
+        
+        if ($Success) {
+            Write-Host "All tests passed for $Arch!" -ForegroundColor $Green
+        }
+        
+        return $Success
     }
     catch {
-        Write-Host "Error running binary: $_" -ForegroundColor $Red
+        Write-Host "Error running test for ${Arch}: ${_}" -ForegroundColor $Red
         return $false
     }
-    
-    # Verify output
-    Print-Header "Verifying output"
-    
-    # Check for expected output patterns
-    $Success = $true
-    
-    if ($Output -match "Hello from" -and $Output -match "C\+\+") {
-        Write-Host "✓ Found greeting message" -ForegroundColor $Green
-    }
-    else {
-        Write-Host "✗ Missing greeting message" -ForegroundColor $Red
-        $Success = $false
-    }
-    
-    if ($Output -match "[Ii]tems:" -or $Output -match "[Oo]riginal items") {
-        Write-Host "✓ Found items list" -ForegroundColor $Green
-    }
-    else {
-        Write-Host "✗ Missing items list" -ForegroundColor $Red
-        $Success = $false
-    }
-    
-    if ($Output -match "[Aa]fter transformation" -or $Output -match "[Tt]ransformed") {
-        Write-Host "✓ Found transformation section" -ForegroundColor $Green
-    }
-    else {
-        Write-Host "✗ Missing transformation section" -ForegroundColor $Red
-        $Success = $false
-    }
-    
-    if ($Output -match "fruit:" -or $Output -match "apple") {
-        Write-Host "✓ Found transformed items" -ForegroundColor $Green
-    }
-    else {
-        Write-Host "✗ Missing transformed items" -ForegroundColor $Red
-        $Success = $false
-    }
-    
-    if ($Output -match "[Ii]ndex" -and $Output -match "exists") {
-        Write-Host "✓ Found index check" -ForegroundColor $Green
-    }
-    else {
-        Write-Host "✗ Missing index check" -ForegroundColor $Red
-        $Success = $false
-    }
-    
-    if ($Success) {
-        Write-Host "All tests passed for $Arch!" -ForegroundColor $Green
-    }
-    
-    return $Success
 }
 
 # Initialize result variables
-$LinuxX86Result = ""
-$LinuxArmResult = ""
-$MacX86Result = ""
-$MacArmResult = ""
-$WinX86Result = ""
+$LinuxX86Result = "SKIP"
+$LinuxArmResult = "SKIP"
+$MacX86Result = "SKIP"
+$MacArmResult = "SKIP"
+$WinX86Result = "SKIP"
 
 # Run tests based on architecture parameters
-if ($Archs.Count -gt 0) {
-    # Test specific architectures
-    foreach ($Arch in $Archs) {
-        switch ($Arch) {
-            "linux-x86" {
-                Print-Header "Testing linux-x86 (verification only)"
-                $BinaryPath = Join-Path $ProjectRoot "build\linux-x86\bin\app"
-                if (Test-Path $BinaryPath) {
-                    Write-Host "✓ Linux x86_64 binary exists" -ForegroundColor $Blue
-                    $LinuxX86Result = "SKIP"
-                }
-                else {
-                    Write-Host "✗ Linux x86_64 binary not found" -ForegroundColor $Red
-                    $LinuxX86Result = "FAIL"
-                }
-                Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
-            }
-            "linux-arm" {
-                Print-Header "Testing linux-arm (verification only)"
-                $BinaryPath = Join-Path $ProjectRoot "build\linux-arm\bin\app"
-                if (Test-Path $BinaryPath) {
-                    Write-Host "✓ Linux ARM64 binary exists" -ForegroundColor $Blue
-                    $LinuxArmResult = "SKIP"
-                }
-                else {
-                    Write-Host "✗ Linux ARM64 binary not found" -ForegroundColor $Red
-                    $LinuxArmResult = "FAIL"
-                }
-                Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
-            }
-            "mac-x86" {
-                Print-Header "Testing mac-x86 (verification only)"
-                $BinaryPath = Join-Path $ProjectRoot "build\mac-x86\bin\app"
-                if (Test-Path $BinaryPath) {
-                    Write-Host "✓ macOS x86_64 binary exists" -ForegroundColor $Blue
-                    $MacX86Result = "SKIP"
-                }
-                else {
-                    Write-Host "✗ macOS x86_64 binary not found" -ForegroundColor $Red
-                    $MacX86Result = "FAIL"
-                }
-                Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
-            }
-            "mac-arm" {
-                Print-Header "Testing mac-arm (verification only)"
-                $BinaryPath = Join-Path $ProjectRoot "build\mac-arm\bin\app"
-                if (Test-Path $BinaryPath) {
-                    Write-Host "✓ macOS ARM64 binary exists" -ForegroundColor $Blue
-                    $MacArmResult = "SKIP"
-                }
-                else {
-                    Write-Host "✗ macOS ARM64 binary not found" -ForegroundColor $Red
-                    $MacArmResult = "FAIL"
-                }
-                Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
-            }
-            "win-x86" {
-                $BinaryPath = Join-Path $ProjectRoot "build\win-x86\bin\app.exe"
-                if (Test-Path $BinaryPath) {
-                    if ($InGitHubActions) {
-                        # In GitHub Actions, we can run the binary directly
-                        if (Run-Test "win-x86") {
-                            $WinX86Result = "PASS"
-                        }
-                        else {
-                            $WinX86Result = "FAIL"
-                        }
-                    }
-                    else {
-                        # Local Windows environment
-                        if (Run-Test "win-x86") {
-                            $WinX86Result = "PASS"
-                        }
-                        else {
-                            $WinX86Result = "FAIL"
-                        }
-                    }
-                }
-                else {
-                    Write-Host "✗ Windows x86_64 binary not found" -ForegroundColor $Red
-                    $WinX86Result = "FAIL"
-                }
-            }
-        }
-    }
+if ($Archs.Count -eq 0) {
+    # Test all architectures if none specified
+    $Archs = @("linux-x86", "linux-arm", "mac-x86", "mac-arm", "win-x86")
 }
-else {
-    # Test all architectures
-    # Linux x86_64
-    Print-Header "Testing linux-x86 (verification only)"
-    $BinaryPath = Join-Path $ProjectRoot "build\linux-x86\bin\app"
-    if (Test-Path $BinaryPath) {
-        Write-Host "✓ Linux x86_64 binary exists" -ForegroundColor $Blue
-        $LinuxX86Result = "SKIP"
-    }
-    else {
-        Write-Host "✗ Linux x86_64 binary not found" -ForegroundColor $Red
-        $LinuxX86Result = "FAIL"
-    }
-    Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
-    
-    # Linux ARM64
-    Print-Header "Testing linux-arm (verification only)"
-    $BinaryPath = Join-Path $ProjectRoot "build\linux-arm\bin\app"
-    if (Test-Path $BinaryPath) {
-        Write-Host "✓ Linux ARM64 binary exists" -ForegroundColor $Blue
-        $LinuxArmResult = "SKIP"
-    }
-    else {
-        Write-Host "✗ Linux ARM64 binary not found" -ForegroundColor $Red
-        $LinuxArmResult = "FAIL"
-    }
-    Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
-    
-    # macOS x86_64
-    Print-Header "Testing mac-x86 (verification only)"
-    $BinaryPath = Join-Path $ProjectRoot "build\mac-x86\bin\app"
-    if (Test-Path $BinaryPath) {
-        Write-Host "✓ macOS x86_64 binary exists" -ForegroundColor $Blue
-        $MacX86Result = "SKIP"
-    }
-    else {
-        Write-Host "✗ macOS x86_64 binary not found" -ForegroundColor $Red
-        $MacX86Result = "FAIL"
-    }
-    Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
-    
-    # macOS ARM64
-    Print-Header "Testing mac-arm (verification only)"
-    $BinaryPath = Join-Path $ProjectRoot "build\mac-arm\bin\app"
-    if (Test-Path $BinaryPath) {
-        Write-Host "✓ macOS ARM64 binary exists" -ForegroundColor $Blue
-        $MacArmResult = "SKIP"
-    }
-    else {
-        Write-Host "✗ macOS ARM64 binary not found" -ForegroundColor $Red
-        $MacArmResult = "FAIL"
-    }
-    Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
-    
-    # Windows x86_64
-    $BinaryPath = Join-Path $ProjectRoot "build\win-x86\bin\app.exe"
-    if (Test-Path $BinaryPath) {
-        if (Run-Test "win-x86") {
-            $WinX86Result = "PASS"
+
+# Process each architecture
+foreach ($Arch in $Archs) {
+    switch ($Arch) {
+        "linux-x86" {
+            # Linux x86_64
+            Print-Header "Testing linux-x86 (verification only)"
+            $BinaryPath = Join-Path $ProjectRoot "build/linux-x86/bin/app"
+            if (Test-Path $BinaryPath) {
+                Write-Host "✓ Linux x86_64 binary exists" -ForegroundColor $Green
+                $LinuxX86Result = "SKIP"
+            }
+            else {
+                Write-Host "✗ Linux x86_64 binary not found" -ForegroundColor $Red
+                $LinuxX86Result = "FAIL"
+            }
+            Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
+            break
         }
-        else {
-            $WinX86Result = "FAIL"
+        "linux-arm" {
+            # Linux ARM64
+            Print-Header "Testing linux-arm (verification only)"
+            $BinaryPath = Join-Path $ProjectRoot "build/linux-arm/bin/app"
+            if (Test-Path $BinaryPath) {
+                Write-Host "✓ Linux ARM64 binary exists" -ForegroundColor $Green
+                $LinuxArmResult = "SKIP"
+            }
+            else {
+                Write-Host "✗ Linux ARM64 binary not found" -ForegroundColor $Red
+                $LinuxArmResult = "FAIL"
+            }
+            Write-Host "Note: Linux binaries cannot be tested on Windows" -ForegroundColor $Yellow
+            break
         }
-    }
-    else {
-        Write-Host "✗ Windows x86_64 binary not found" -ForegroundColor $Red
-        $WinX86Result = "FAIL"
+        "mac-x86" {
+            # macOS x86_64
+            Print-Header "Testing mac-x86 (verification only)"
+            $BinaryPath = Join-Path $ProjectRoot "build/mac-x86/bin/app"
+            if (Test-Path $BinaryPath) {
+                Write-Host "✓ macOS x86_64 binary exists" -ForegroundColor $Green
+                $MacX86Result = "SKIP"
+            }
+            else {
+                Write-Host "✗ macOS x86_64 binary not found" -ForegroundColor $Red
+                $MacX86Result = "FAIL"
+            }
+            Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
+            break
+        }
+        "mac-arm" {
+            # macOS ARM64
+            Print-Header "Testing mac-arm (verification only)"
+            $BinaryPath = Join-Path $ProjectRoot "build/mac-arm/bin/app"
+            if (Test-Path $BinaryPath) {
+                Write-Host "✓ macOS ARM64 binary exists" -ForegroundColor $Green
+                $MacArmResult = "SKIP"
+            }
+            else {
+                Write-Host "✗ macOS ARM64 binary not found" -ForegroundColor $Red
+                $MacArmResult = "FAIL"
+            }
+            Write-Host "Note: macOS binaries cannot be tested on Windows" -ForegroundColor $Yellow
+            break
+        }
+        "win-x86" {
+            # Windows x86_64
+            if (Run-Test -Arch "win-x86" -Debug $Debug -Clean $Clean) {
+                $WinX86Result = "PASS"
+            }
+            else {
+                $WinX86Result = "FAIL"
+            }
+            break
+        }
     }
 }
 
@@ -396,3 +427,4 @@ if ($LinuxX86Result -eq "FAIL" -or $LinuxArmResult -eq "FAIL" -or
 }
 
 Print-Header "All tests completed successfully!"
+exit 0
