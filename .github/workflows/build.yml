@@ -149,15 +149,13 @@ jobs:
         name: linux-arm-binaries
         path: build/linux-arm/bin/
       
-    - name: Test Linux ARM64
+    - name: Install QEMU for ARM emulation
       run: |
-        # Only install QEMU for ARM emulation if needed
-        if ! command -v qemu-aarch64-static &> /dev/null; then
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static
-        fi
+        sudo apt-get update
+        sudo apt-get install -y qemu-user-static
         
-        ./scripts/test.sh linux-arm
+    - name: Test Linux ARM64
+      run: ./scripts/test.sh linux-arm
 
   test-windows-x86:
     name: Test Windows x86_64
