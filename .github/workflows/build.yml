@@ -17,24 +17,43 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install build dependencies
+    - name: Install common build dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
-        sudo apt-get install -y mingw-w64 g++-mingw-w64-x86-64 wine64
+        # Install common dependencies
+        sudo apt-get update -qq
+        sudo apt-get install -qq -y build-essential clang lld xxd vim-common
+        
+        # Verify clang installation
         clang --version
-        x86_64-w64-mingw32-g++ --version || echo "x86_64-w64-mingw32-g++ not available"
     
     # Build all platforms from Linux
     - name: Build Linux x86_64
       run: ./scripts/build.sh linux-x86
       
     - name: Build Linux ARM_64
-      run: ./scripts/build.sh linux-arm
+      run: |
+        # Make sure ARM64 cross-compilation tools are installed
+        sudo apt-get update -qq
+        sudo apt-get install -qq -y crossbuild-essential-arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        
+        # Verify compiler is available
+        aarch64-linux-gnu-g++ --version
+        
+        # Run the build
+        ./scripts/build.sh linux-arm
       
     # Build Windows platforms
     - name: Build Windows x86_64
-      run: ./scripts/build.sh win-x86
+      run: |
+        # Install Windows cross-compilation tools
+        sudo apt-get update -qq
+        sudo apt-get install -qq -y mingw-w64 g++-mingw-w64-x86-64 wine64
+        
+        # Verify compiler is available
+        x86_64-w64-mingw32-g++ --version
+        
+        # Run the build
+        ./scripts/build.sh win-x86
       
 
     # Set up osxcross for macOS cross-compilation
@@ -43,16 +62,42 @@ jobs:
         # Create directories for osxcross
         sudo mkdir -p /opt/osxcross/bin
         
-        # We'll use our placeholder scripts since we don't have a real macOS SDK
-        # In a real setup, you would download and install osxcross here
-        echo "Using placeholder scripts for macOS cross-compilation"
+        # Make sure the placeholder scripts exist
+        ls -la ./docker/
+        
+        # Copy our placeholder compiler scripts to the osxcross bin directory
+        sudo cp ./docker/x86_64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy x86_64-apple-darwin-clang++"
+        sudo cp ./docker/arm64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy arm64-apple-darwin-clang++"
+        sudo chmod +x /opt/osxcross/bin/*-clang++ || echo "Failed to make scripts executable"
+        
+        # Create symlinks for o64-clang++ and arm64-clang++ if they don't exist
+        sudo ln -sf /opt/osxcross/bin/x86_64-apple-darwin-clang++ /opt/osxcross/bin/o64-clang++
+        sudo ln -sf /opt/osxcross/bin/arm64-apple-darwin-clang++ /opt/osxcross/bin/arm64-clang++
+        
+        # Add osxcross bin to PATH
+        echo "/opt/osxcross/bin" >> $GITHUB_PATH
+        
+        # List the contents of the bin directory
+        ls -la /opt/osxcross/bin/
+        
+        echo "macOS cross-compilation environment set up with placeholder scripts"
         
     # Build macOS platforms using cross-compilation
     - name: Build macOS x86_64
-      run: ./scripts/build.sh mac-x86
+      run: |
+        # Make sure the compiler is in PATH
+        which x86_64-apple-darwin-clang++ || echo "x86_64-apple-darwin-clang++ not found in PATH"
+        
+        # Run the build
+        ./scripts/build.sh mac-x86
       
-    - name: Build macOS ARM_64
-      run: ./scripts/build.sh mac-arm
+    - name: Build macOS ARM64
+      run: |
+        # Make sure the compiler is in PATH
+        which arm64-apple-darwin-clang++ || echo "arm64-apple-darwin-clang++ not found in PATH"
+        
+        # Run the build
+        ./scripts/build.sh mac-arm
       
     # Upload artifacts
     - name: Upload Linux x86_64 artifacts
