@@ -25,12 +25,23 @@ jobs:
     - name: Build Linux x86_64
       run: ./scripts/build.sh linux-x86
       
+    - name: Build Linux ARM_64
+      run: ./scripts/build.sh linux-arm
+      
     # Upload artifacts
+
     - name: Upload Linux x86_64 artifacts
       uses: actions/upload-artifact@v4
       with:
         name: linux-x86-binaries
         path: build/linux-x86/bin/
+        retention-days: 1
+        
+    - name: Upload Linux ARM_64 artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-arm-binaries
+        path: build/linux-arm/bin/
         retention-days: 1
 
 
@@ -52,3 +63,21 @@ jobs:
       
     - name: Test Linux x86_64
       run: ./scripts/test.sh linux-x86
+
+  test-linux-arm:
+    name: Test Linux ARM_64
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Linux ARM_64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-arm-binaries
+        path: build/linux-arm/bin/
+        
+    - name: Test Linux ARM_64
+      run: ./scripts/test.sh linux-arm

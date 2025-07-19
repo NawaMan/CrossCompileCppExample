@@ -27,6 +27,7 @@ apt-get install -y        \
     pkg-config                 \
     python3                    \
     python3-pip                \
+    qemu-user-static           \
     wget                       \
     zlib1g-dev
 
