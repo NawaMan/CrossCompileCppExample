@@ -26,6 +26,9 @@ jobs:
     - name: Build Linux ARM_64
       run: ./scripts/build.sh linux-arm
       
+    - name: Build Windows x86_64
+      run: ./scripts/build.sh win-x86
+      
     # Upload artifacts
 
     - name: Upload Linux x86_64 artifacts
@@ -40,6 +43,13 @@ jobs:
       with:
         name: linux-arm-binaries
         path: build/linux-arm/bin/
+        retention-days: 1
+        
+    - name: Upload Windows x86_64 artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: win-x86-binaries
+        path: build/win-x86/bin/
         retention-days: 1
 
 
@@ -61,6 +71,11 @@ jobs:
       
     - name: Test Linux x86_64
       run: ./scripts/test.sh linux-x86
+      
+    - name: Build Windows x86_64
+      run: |
+        # Run the build
+        ./scripts/build.sh win-x86
 
   test-linux-arm:
     name: Test Linux ARM_64
@@ -79,3 +94,25 @@ jobs:
         
     - name: Test Linux ARM_64
       run: ./scripts/test.sh linux-arm
+
+  test-windows-x86:
+    name: Test Windows x86_64
+    needs: build
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Windows x86_64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: win-x86-binaries
+        path: build/win-x86/bin/
+      
+    - name: Test Windows x86_64
+      shell: pwsh
+      run: |
+        # Run the PowerShell test script for Windows
+        ./scripts/test.ps1 win-x86
+        exit $LASTEXITCODE

@@ -21,6 +21,8 @@ while [[ $# -gt 0 ]]; do
       ARCH="linux-x86"; shift;;
     linux-arm)
       ARCH="linux-arm"; shift;;
+    win-x86)
+      ARCH="win-x86"; shift;;
     --clean)
       CLEAN_MODE=true; shift;;
     --help)
@@ -28,13 +30,18 @@ while [[ $# -gt 0 ]]; do
       echo "Architectures:"
       echo "  linux-x86    Build for Linux x86_64"
       echo "  linux-arm    Build for Linux ARM64"
+      echo "  win-x86      Build for Windows x86_64"
       echo "Options:"
       echo "  --clean      Clean build directories before building"
       echo "  --all        Build all supported architectures"
       echo "  --help       Show this help message"
       exit 0;;
     *)
-      echo "Unknown option: $1"; exit 1;;
+      echo "Unknown option: $1"
+      echo "Usage: $0 <architecture>"
+      echo "Run '$0 --help' for more information."
+      exit 1
+      ;;
   esac
 done
 
@@ -49,7 +56,7 @@ if [ "$CLEAN_MODE" = true ] && [ -z "$ARCH" ]; then
 fi
 
 if [ "$BUILD_ALL" = true ]; then
-  for arch in linux-x86 linux-arm; do
+  for arch in linux-x86 linux-arm win-x86; do
     echo -e "\n==== Building $arch ===="
     CLEAN_ARG=""
     [ "$arch" = "linux-x86" ] && CLEAN_ARG="--clean"
@@ -103,6 +110,52 @@ elif [ "$ARCH" = "linux-arm" ]; then
       -e SETUP_ARM64=true                   \
       dev                                   \
       /app/docker/build-linux-arm.sh "$CLEAN_MODE"
+    exit $?
+  fi
+elif [ "$ARCH" = "win-x86" ]; then
+  echo "Building for Windows x86_64 architecture"
+  
+  # Run the build inside Docker using our dedicated script
+  if [ "$IN_GITHUB_ACTIONS" = true ]; then
+    # Run build directly on GitHub Actions runner
+    echo "Running build directly on GitHub Actions runner..."
+    
+    # Make sure Windows cross-compilation tools are installed
+    if ! command -v x86_64-w64-mingw32-g++ &> /dev/null; then
+      echo "Installing Windows cross-compilation tools..."
+      sudo apt-get update -qq
+      sudo apt-get install -qq -y mingw-w64 g++-mingw-w64-x86-64 wine64
+    fi
+    
+    # Verify compiler is available
+    if ! command -v x86_64-w64-mingw32-g++ &> /dev/null; then
+      echo "Error: Windows cross-compiler (x86_64-w64-mingw32-g++) not found"
+      exit 1
+    fi
+    
+    COMPILER="x86_64-w64-mingw32-g++"
+    # Use static linking for Windows builds to avoid DLL dependencies
+    ARCH_FLAGS="-static"
+    # Add flags to statically link the standard libraries
+    SYSROOT_FLAGS="-static-libgcc -static-libstdc++"
+    EXTENSION=".exe"
+  else
+    # Run the build inside Docker container
+    echo "Running build in Docker container..."
+    
+    # Get host user UID and GID for Docker
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    
+    # Run Docker with our build script
+    docker compose -f "${DOCKER_DIR}/docker-compose.yml" run --rm \
+      --user "${HOST_UID}:${HOST_GID}" \
+      -e ARCH="$ARCH" \
+      -e SETUP_WINDOWS=true \
+      dev \
+      /app/docker/build-win-x86.sh "${CLEAN_MODE}"
+    
+    # Exit early since the Docker container handled the build
     exit $?
   fi
 else
