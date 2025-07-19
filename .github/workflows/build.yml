@@ -18,9 +18,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Install common build dependencies
-      run: |
-        # Verify clang installation
-        clang --version
+      run: sudo ./docker/setup-in-docker.sh
     
     - name: Build Linux x86_64
       run: ./scripts/build.sh linux-x86
