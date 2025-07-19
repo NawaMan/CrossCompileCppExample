@@ -17,44 +17,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld build-essential crossbuild-essential-arm64 qemu-user-static
-        sudo apt-get install -y mingw-w64 g++-mingw-w64-x86-64 wine64
-        clang --version
-        x86_64-w64-mingw32-g++ --version || echo "x86_64-w64-mingw32-g++ not available"
+    - name: Install common build dependencies
+      run: sudo ./docker/setup-in-docker.sh
     
-    # Build all platforms from Linux
     - name: Build Linux x86_64
       run: ./scripts/build.sh linux-x86
       
     - name: Build Linux ARM_64
       run: ./scripts/build.sh linux-arm
       
-    # Build Windows platforms
     - name: Build Windows x86_64
       run: ./scripts/build.sh win-x86
       
-
-    # Set up osxcross for macOS cross-compilation
-    - name: Set up osxcross
-      run: |
-        # Create directories for osxcross
-        sudo mkdir -p /opt/osxcross/bin
-        
-        # We'll use our placeholder scripts since we don't have a real macOS SDK
-        # In a real setup, you would download and install osxcross here
-        echo "Using placeholder scripts for macOS cross-compilation"
-        
-    # Build macOS platforms using cross-compilation
-    - name: Build macOS x86_64
-      run: ./scripts/build.sh mac-x86
-      
-    - name: Build macOS ARM_64
-      run: ./scripts/build.sh mac-arm
-      
     # Upload artifacts
+
     - name: Upload Linux x86_64 artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -69,27 +45,12 @@ jobs:
         path: build/linux-arm/bin/
         retention-days: 1
         
-    - name: Upload macOS x86_64 artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: mac-x86-binaries
-        path: build/mac-x86/bin/
-        retention-days: 1
-        
-    - name: Upload macOS ARM_64 artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: mac-arm-binaries
-        path: build/mac-arm/bin/
-        retention-days: 1
-        
     - name: Upload Windows x86_64 artifacts
       uses: actions/upload-artifact@v4
       with:
         name: win-x86-binaries
         path: build/win-x86/bin/
         retention-days: 1
-        
 
 
   # Test jobs for each platform
@@ -110,6 +71,11 @@ jobs:
       
     - name: Test Linux x86_64
       run: ./scripts/test.sh linux-x86
+      
+    - name: Build Windows x86_64
+      run: |
+        # Run the build
+        ./scripts/build.sh win-x86
 
   test-linux-arm:
     name: Test Linux ARM_64
@@ -125,11 +91,6 @@ jobs:
       with:
         name: linux-arm-binaries
         path: build/linux-arm/bin/
-      
-    - name: Install QEMU for ARM emulation
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y qemu-user-static
         
     - name: Test Linux ARM_64
       run: ./scripts/test.sh linux-arm
@@ -154,80 +115,4 @@ jobs:
       run: |
         # Run the PowerShell test script for Windows
         ./scripts/test.ps1 win-x86
-        exit $LASTEXITCODE  # Use the exit code from the test script
-
-  # Test macOS x86_64 binaries on macOS runner
-  test-macos-x86:
-    name: Test MacOS x86_64
-    needs: build
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download macOS x86_64 artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: mac-x86-binaries
-        path: build/mac-x86/bin/
-        
-    - name: Make binary executable
-      run: |
-        chmod +x build/mac-x86/bin/app
-        ls -la build/mac-x86/bin/
-        file build/mac-x86/bin/app
-
-    - name: Test MacOS x86_64
-      run: ./scripts/test.sh mac-x86
-
-  # Test macOS ARM_64 binaries on macOS runner
-  test-macos-arm:
-    name: Test MacOS ARM_64
-    needs: build
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download macOS ARM_64 artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: mac-arm-binaries
-        path: build/mac-arm/bin/
-        
-    - name: Make binary executable
-      run: |
-        chmod +x build/mac-arm/bin/app
-        ls -la build/mac-arm/bin/
-        file build/mac-arm/bin/app
-        
-    - name: Test MacOS ARM_64
-      run: ./scripts/test.sh mac-arm
-
-  # Final summary job
-  summary:
-    name: Build and Test Summary
-    needs: [test-linux-x86, test-linux-arm, test-macos-x86, test-macos-arm, test-windows-x86]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Summarize results
-      run: |
-        echo "Cross-Platform Build and Test Summary"
-        echo "-------------------------------------"
-        echo "Linux x86_64: ${{ needs.test-linux-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "Linux ARM_64: ${{ needs.test-linux-arm.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "macOS x86_64: ${{ needs.test-macos-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "macOS ARM_64: ${{ needs.test-macos-arm.result == 'success' && 'PASS' || 'FAIL' }}"
-        echo "Windows x86_64: ${{ needs.test-windows-x86.result == 'success' && 'PASS' || 'FAIL' }}"
-        # Windows ARM support removed
-        
-        if [[ "${{ needs.test-linux-x86.result }}" != "success" || "${{ needs.test-linux-arm.result }}" != "success" || "${{ needs.test-macos-x86.result }}" != "success" || "${{ needs.test-macos-arm.result }}" != "success" || "${{ needs.test-windows-x86.result }}" != "success" ]]; then
-          echo "Some builds or tests failed!"
-          exit 1
-        else
-          echo "All builds and tests passed!"
-        fi
+        exit $LASTEXITCODE
