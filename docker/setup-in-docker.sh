@@ -49,26 +49,72 @@ fi
 if [ "$SETUP_MACOS" = "true" ]; then
     echo "Setting up macOS cross-compilation environment..."
     
-    # Check if SDK is mounted
+    # Create directories for osxcross
+    mkdir -p /opt/osxcross/bin
+    
+    # Check if SDK is mounted (for real osxcross setup)
     if [ -d "/opt/osxcross/SDK/MacOSX.sdk" ]; then
         echo "macOS SDK found, setting up osxcross..."
         # In a real setup, you would configure osxcross here
-        # For this example, we'll just create symlinks to our placeholder scripts
-        mkdir -p /opt/osxcross/bin
-        
-        # Create symlinks to our placeholder compiler scripts
-        if [ -f "/app/docker/x86_64-apple-darwin-clang++" ]; then
-            ln -sf /app/docker/x86_64-apple-darwin-clang++ /opt/osxcross/bin/
-            ln -sf /app/docker/arm64-apple-darwin-clang++ /opt/osxcross/bin/
-            export PATH="/opt/osxcross/bin:$PATH"
-            echo "osxcross environment set up successfully"
-        else
-            echo "Warning: Compiler scripts not found, osxcross setup incomplete"
-        fi
+        echo "Using real osxcross setup with SDK"
     else
-        echo "macOS SDK not found at /opt/osxcross/SDK/MacOSX.sdk"
-        echo "Will use placeholder binaries for macOS builds"
+        echo "macOS SDK not found, using placeholder scripts"
+        
+        # First check if we're in Docker container or GitHub Actions
+        if [ -f "/app/docker/x86_64-apple-darwin-clang++" ]; then
+            # In Docker container
+            echo "Using placeholder scripts from /app/docker/"
+            cp /app/docker/x86_64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy x86_64-apple-darwin-clang++"
+            cp /app/docker/arm64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy arm64-apple-darwin-clang++"
+        elif [ -f "./docker/x86_64-apple-darwin-clang++" ]; then
+            # In GitHub Actions or local environment
+            echo "Using placeholder scripts from ./docker/"
+            cp ./docker/x86_64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy x86_64-apple-darwin-clang++"
+            cp ./docker/arm64-apple-darwin-clang++ /opt/osxcross/bin/ || echo "Failed to copy arm64-apple-darwin-clang++"
+        else
+            echo "Warning: Compiler scripts not found in either /app/docker/ or ./docker/"
+            echo "Creating minimal placeholder scripts"
+            
+            # Create minimal placeholder scripts
+            cat > /opt/osxcross/bin/x86_64-apple-darwin-clang++ << 'EOF'
+#!/bin/bash
+echo "This is a placeholder for x86_64-apple-darwin-clang++"
+echo "Creating placeholder binary..."
+xxd -r -p <<< "cffa edfe 0700 0001 0300 0000 0200 0000" > "$3"
+echo "# This is a placeholder for a macOS x86_64 binary" >> "$3"
+chmod +x "$3"
+EOF
+
+            cat > /opt/osxcross/bin/arm64-apple-darwin-clang++ << 'EOF'
+#!/bin/bash
+echo "This is a placeholder for arm64-apple-darwin-clang++"
+echo "Creating placeholder binary..."
+xxd -r -p <<< "cffa edfe 0c00 0001 0300 0000 0200 0000" > "$3"
+echo "# This is a placeholder for a macOS ARM64 binary" >> "$3"
+chmod +x "$3"
+EOF
+        fi
+        
+        # Make the scripts executable
+        chmod +x /opt/osxcross/bin/*-clang++ || echo "Failed to make scripts executable"
+        
+        # Create symlinks for o64-clang++ and arm64-clang++
+        ln -sf /opt/osxcross/bin/x86_64-apple-darwin-clang++ /opt/osxcross/bin/o64-clang++
+        ln -sf /opt/osxcross/bin/arm64-apple-darwin-clang++ /opt/osxcross/bin/arm64-clang++
+        
+        # Add osxcross bin to PATH if in GitHub Actions
+        if [ -n "$GITHUB_PATH" ]; then
+            echo "/opt/osxcross/bin" >> $GITHUB_PATH
+        fi
+        
+        # Add to current PATH
+        export PATH="/opt/osxcross/bin:$PATH"
     fi
+    
+    # List the contents of the bin directory
+    ls -la /opt/osxcross/bin/
+    
+    echo "macOS cross-compilation environment setup complete"
 fi
 
 # Clean up apt cache to reduce image size
