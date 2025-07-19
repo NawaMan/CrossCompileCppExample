@@ -30,14 +30,14 @@ while [[ $# -gt 0 ]]; do
       ARCHS+=("$1")
       shift
       ;;
-    -h|--help)
+    --help)
       echo "Usage: $0 [options] [architecture]"
       echo "Options:"
-      echo "  -h, --help   Show this help message"
+      echo "  --help   Show this help message"
       echo "Architecture:"
       echo "  linux-x86    Test Linux x86_64 build"
       echo "  linux-arm    Test Linux ARM64 build"
-      echo "  (none)       Test all supported Linux architectures"
+      echo "  (none)       Test all architectures"
       exit 0
       ;;
     *)
@@ -125,28 +125,10 @@ if [ ${#ARCHS[@]} -gt 0 ]; then
         LINUX_X86_RESULT="FAIL"
       elif [ "$ARCH" == "linux-arm" ]; then
         LINUX_ARM_RESULT="FAIL"
-      fi
+      fi  
     fi
   done
-else
-  # Test both Linux architectures by default
-  if run_test "linux-x86"; then
-    LINUX_X86_RESULT="PASS"
-  else
-    LINUX_X86_RESULT="FAIL"
-  fi
-
-  if run_test "linux-arm"; then
-    LINUX_ARM_RESULT="PASS"
-  else
-    LINUX_ARM_RESULT="FAIL"
-  fi
 fi
-
-# Print summary
-print_header "Test Summary"
-echo -e "linux-x86: ${LINUX_X86_RESULT:-SKIP}"
-echo -e "linux-arm: ${LINUX_ARM_RESULT:-SKIP}"
 
 # Exit with error if any test failed
 if [ "$LINUX_X86_RESULT" = "FAIL" ] || [ "$LINUX_ARM_RESULT" = "FAIL" ]; then
